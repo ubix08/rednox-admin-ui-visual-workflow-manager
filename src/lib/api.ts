@@ -1,5 +1,5 @@
-import { ApiResponse, Flow, ExecutionResult, ExecutionLog, NodeDefinition, NodeCategory } from '@/types/schema';
-const BASE_URL = 'https://rednox.ubixsnow08.workers.dev';
+import { ApiResponse } from '@/types/schema';
+const BASE_URL = import.meta.env.DEV ? '' : '';
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {
   try {
     const response = await fetch(`${BASE_URL}${endpoint}`, {
@@ -9,69 +9,28 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<Api
         ...options?.headers,
       },
     });
-    const data = await response.json().catch(() => null);
     if (!response.ok) {
-      console.warn(`[API Warning] ${response.status} ${endpoint}:`, data);
-      return {
-        success: false,
-        error: data?.error || data?.message || response.statusText
-      };
+      const errData = await response.json().catch(() => ({}));
+      return { success: false, error: errData.error || response.statusText };
     }
-    if (data && typeof data === 'object' && 'success' in data) {
-      return {
-        success: data.success,
-        data: data.data ?? data,
-        error: data.error
-      };
-    }
-    return { success: true, data: data as T };
+    const data = await response.json();
+    return { success: true, data: data.data };
   } catch (error) {
     console.error(`[API Error] ${endpoint}:`, error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown network error' };
   }
 }
 export const workflowApi = {
-  // Workflows
-  list: () => apiFetch<Flow[]>('/admin/flows'),
-  create: (flowData: Partial<Flow>) =>
-    apiFetch<Flow>('/admin/flows', {
+  execute: (flowId: string, payload: any) => 
+    apiFetch<{ success: boolean; logs: any[] }>(`/api/flows/execute`, {
       method: 'POST',
-      body: JSON.stringify(flowData),
+      body: JSON.stringify({ flowId, payload }),
     }),
-  get: (id: string) => apiFetch<Flow>(`/admin/flows/${id}`),
-  update: (id: string, flowData: Partial<Flow>) =>
-    apiFetch<Flow>(`/admin/flows/${id}`, {
+  save: (flowId: string, flowData: any) =>
+    apiFetch<void>(`/api/flows/${flowId}`, {
       method: 'PUT',
       body: JSON.stringify(flowData),
     }),
-  delete: (id: string) =>
-    apiFetch<void>(`/admin/flows/${id}`, {
-      method: 'DELETE',
-    }),
-  enable: (id: string) =>
-    apiFetch<void>(`/admin/flows/${id}/enable`, {
-      method: 'POST',
-    }),
-  disable: (id: string) =>
-    apiFetch<void>(`/admin/flows/${id}/disable`, {
-      method: 'POST',
-    }),
-  // Nodes Metadata
-  listNodes: () => apiFetch<NodeDefinition[]>('/admin/nodes'),
-  listNodeCategories: () => apiFetch<NodeCategory[]>('/admin/nodes/categories'),
-  getNodeDefinition: (type: string) => apiFetch<NodeDefinition>(`/admin/nodes/${type}`),
-  // Execution
-  execute: (id: string, body: { nodeId?: string | null; payload: any }) =>
-    apiFetch<ExecutionResult>(`/admin/flows/${id}/execute`, {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }),
-  getDebugLogs: (id: string, limit: number = 50) =>
-    apiFetch<ExecutionLog[]>(`/admin/flows/${id}/debug?limit=${limit}`),
-  export: (id: string) => apiFetch<any>(`/admin/flows/${id}/export`),
-  import: (data: any) =>
-    apiFetch<Flow>('/admin/flows/import', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  get: (flowId: string) =>
+    apiFetch<any>(`/api/flows/${flowId}`),
 };

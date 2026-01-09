@@ -13,11 +13,14 @@ import {
   EdgeChange
 } from '@xyflow/react';
 import { v4 as uuidv4 } from 'uuid';
+import { ExecutionLog } from '@/types/schema';
 interface EditorState {
   nodes: Node[];
   edges: Edge[];
   currentFlowId: string | null;
   selectedNodeId: string | null;
+  logs: ExecutionLog[];
+  isExecuting: boolean;
   initialize: (flowId: string, nodes: Node[], edges: Edge[]) => void;
   onNodesChange: OnNodesChange;
   onEdgesChange: OnEdgesChange;
@@ -28,14 +31,20 @@ interface EditorState {
   deleteNode: (id: string) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
+  // Execution & Debug
+  addLog: (log: Omit<ExecutionLog, 'id' | 'timestamp'>) => void;
+  clearLogs: () => void;
+  setExecuting: (status: boolean) => void;
 }
 export const useEditorStore = create<EditorState>((set, get) => ({
   nodes: [],
   edges: [],
   currentFlowId: null,
   selectedNodeId: null,
+  logs: [],
+  isExecuting: false,
   initialize: (flowId, nodes, edges) => {
-    set({ currentFlowId: flowId, nodes, edges, selectedNodeId: null });
+    set({ currentFlowId: flowId, nodes, edges, selectedNodeId: null, logs: [], isExecuting: false });
   },
   onNodesChange: (changes: NodeChange[]) => {
     set({
@@ -57,10 +66,13 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     const categoryMap: Record<string, string> = {
       'HTTP In': 'input',
       'Webhook': 'input',
+      'Cron Timer': 'input',
       'HTTP Response': 'output',
       'Slack Post': 'output',
       'KV Put': 'storage',
       'KV Get': 'storage',
+      'JavaScript': 'function',
+      'Condition': 'function',
     };
     const newNode: Node = {
       id: uuidv4(),
@@ -70,7 +82,11 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         label,
         type,
         category: categoryMap[type] || 'function',
-        config: {},
+        config: {
+          retries: 0,
+          timeout: 5000,
+          ...(type === 'HTTP In' ? { method: 'GET', path: '/api/trigger' } : {})
+        },
       },
     };
     set({ nodes: [...get().nodes, newNode] });
@@ -78,7 +94,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   updateNodeData: (id, newData) => {
     set({
       nodes: get().nodes.map((node) =>
-        node.id === id 
+        node.id === id
           ? { ...node, data: { ...node.data, ...newData } }
           : node
       ),
@@ -93,4 +109,16 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   setNodes: (nodes) => set({ nodes }),
   setEdges: (edges) => set({ edges }),
+  addLog: (log) => {
+    const newLog: ExecutionLog = {
+      ...log,
+      id: uuidv4(),
+      timestamp: new Date().toLocaleTimeString(),
+    };
+    set((state) => ({
+      logs: [newLog, ...state.logs].slice(0, 50)
+    }));
+  },
+  clearLogs: () => set({ logs: [] }),
+  setExecuting: (status) => set({ isExecuting: status }),
 }));

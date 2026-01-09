@@ -29,36 +29,28 @@ export function ExecutionModal({ open, onOpenChange, flowId }: ExecutionModalPro
   const addLog = useEditorStore((s) => s.addLog);
   const clearLogs = useEditorStore((s) => s.clearLogs);
   const isExecuting = useEditorStore((s) => s.isExecuting);
-  const nodes = useEditorStore((s) => s.nodes);
   const handleRun = async () => {
     try {
       const parsed = JSON.parse(payload);
       setExecuting(true);
       clearLogs();
       onOpenChange(false);
-      toast.info("Triggering workflow execution...");
-      // Try to find a trigger node or just pass null
-      const triggerNode = nodes.find(n => n.data?.category === 'input');
-      const response = await workflowApi.execute(flowId, {
-        nodeId: triggerNode?.id || null,
-        payload: parsed
-      });
-      if (response.success && response.data) {
-        response.data.logs.forEach(log => addLog(log));
-        if (response.data.success) {
-          toast.success("Workflow execution finished");
+      toast.info("Triggering workflow...");
+      const result = await workflowApi.execute(flowId, parsed);
+      if (result.success && result.data) {
+        result.data.logs.forEach((l: any) => addLog(l));
+        if (result.data.success) {
+          toast.success("Workflow finished successfully");
         } else {
-          toast.error("Execution encountered errors (Check Debug)");
+          toast.error("Workflow failed during execution");
         }
       } else {
-        toast.error(response.error || "Execution failed");
+        toast.error(result.error || "Execution failed");
       }
     } catch (e) {
       toast.error("Invalid JSON payload");
     } finally {
-      // Keep executing status for polling a bit longer if needed, 
-      // but here we toggle based on immediate response
-      setTimeout(() => setExecuting(false), 3000);
+      setExecuting(false);
     }
   };
   return (
@@ -70,7 +62,7 @@ export function ExecutionModal({ open, onOpenChange, flowId }: ExecutionModalPro
             Manual Execution
           </DialogTitle>
           <DialogDescription>
-            Trigger this workflow on the serverless edge with a custom payload.
+            Trigger this workflow manually with a custom JSON payload.
           </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="payload" className="w-full">
@@ -79,19 +71,40 @@ export function ExecutionModal({ open, onOpenChange, flowId }: ExecutionModalPro
             <TabsTrigger value="samples">Quick Samples</TabsTrigger>
           </TabsList>
           <TabsContent value="payload" className="py-4">
-            <Textarea
-              className="font-mono text-xs min-h-[250px] bg-muted/50 p-4 leading-relaxed"
-              value={payload}
-              onChange={(e) => setPayload(e.target.value)}
-              placeholder='{ "key": "value" }'
-            />
+            <div className="relative group">
+              <div className="absolute right-3 top-3 z-10 opacity-50 group-hover:opacity-100 transition-opacity">
+                <Code className="h-4 w-4" />
+              </div>
+              <Textarea
+                className="font-mono text-xs min-h-[250px] bg-muted/50 p-4 leading-relaxed"
+                value={payload}
+                onChange={(e) => setPayload(e.target.value)}
+                placeholder='{ "key": "value" }'
+              />
+            </div>
           </TabsContent>
           <TabsContent value="samples" className="py-4 space-y-2">
-            <Button variant="outline" className="w-full justify-start gap-2 h-12" onClick={() => setPayload(JSON.stringify(SAMPLES.webhook, null, 2))}>
-              <Send className="h-4 w-4" /> Webhook Event Sample
+            <Button 
+              variant="outline" 
+              className="w-full justify-start gap-2 h-12"
+              onClick={() => {
+                setPayload(JSON.stringify(SAMPLES.webhook, null, 2));
+                toast.success("Loaded Webhook sample");
+              }}
+            >
+              <Send className="h-4 w-4" />
+              Webhook Event Sample
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2 h-12" onClick={() => setPayload(JSON.stringify(SAMPLES.http, null, 2))}>
-              <Play className="h-4 w-4" /> HTTP Request Sample
+            <Button 
+              variant="outline" 
+              className="w-full justify-start gap-2 h-12"
+              onClick={() => {
+                setPayload(JSON.stringify(SAMPLES.http, null, 2));
+                toast.success("Loaded HTTP sample");
+              }}
+            >
+              <Play className="h-4 w-4" />
+              HTTP Request Sample
             </Button>
           </TabsContent>
         </Tabs>

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useEditorStore } from '@/store/useEditorStore';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -6,8 +6,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Settings2, Trash2, Info, Code } from 'lucide-react';
+import { Settings2, Trash2, Info, Code, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { NodeConfig } from '@/types/schema';
 export function PropertyEditor() {
   const selectedId = useEditorStore((s) => s.selectedNodeId);
   const nodes = useEditorStore((s) => s.nodes);
@@ -27,8 +28,12 @@ export function PropertyEditor() {
       </div>
     );
   }
-  const { label, category, type, config = {} } = node.data;
-  const handleUpdate = (updates: any) => {
+  const data = (node.data || {}) as Record<string, any>;
+  const config = (data.config || {}) as NodeConfig;
+  const category = String(data.category || 'function');
+  const type = String(data.type || 'unknown');
+  const label = String(data.label || 'Node');
+  const handleUpdate = (updates: Partial<NodeConfig>) => {
     updateNodeData(node.id, {
       config: { ...config, ...updates }
     });
@@ -42,10 +47,10 @@ export function PropertyEditor() {
           </div>
           <h3 className="text-sm font-semibold">Properties</h3>
         </div>
-        <Button 
-          variant="ghost" 
-          size="icon" 
-          className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:bg-destructive/10"
           onClick={() => deleteNode(node.id)}
         >
           <Trash2 className="h-4 w-4" />
@@ -57,9 +62,9 @@ export function PropertyEditor() {
           <section className="space-y-3">
             <div className="space-y-1.5">
               <Label htmlFor="node-label">Display Name</Label>
-              <Input 
-                id="node-label" 
-                value={label} 
+              <Input
+                id="node-label"
+                value={label}
                 onChange={(e) => updateNodeData(node.id, { label: e.target.value })}
                 className="h-8 text-xs"
               />
@@ -87,9 +92,9 @@ export function PropertyEditor() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label>Method</Label>
-                  <Select 
-                    value={config.method || 'GET'} 
-                    onValueChange={(val) => handleUpdate({ method: val })}
+                  <Select
+                    value={String(config.method || 'GET')}
+                    onValueChange={(val) => handleUpdate({ method: val as any })}
                   >
                     <SelectTrigger className="h-8 text-xs">
                       <SelectValue />
@@ -104,9 +109,9 @@ export function PropertyEditor() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Path</Label>
-                  <Input 
-                    placeholder="/api/v1/trigger" 
-                    value={config.path || ''} 
+                  <Input
+                    placeholder="/api/v1/trigger"
+                    value={String(config.path || '')}
                     onChange={(e) => handleUpdate({ path: e.target.value })}
                     className="h-8 text-xs font-mono"
                   />
@@ -121,10 +126,10 @@ export function PropertyEditor() {
                     <Label>Script Code</Label>
                     <Code className="h-3 w-3 text-muted-foreground" />
                   </div>
-                  <Textarea 
-                    placeholder="return msg;" 
+                  <Textarea
+                    placeholder="return msg;"
                     className="min-h-[120px] font-mono text-xs bg-muted/50 resize-y"
-                    value={config.code || ''} 
+                    value={String(config.code || '')}
                     onChange={(e) => handleUpdate({ code: e.target.value })}
                   />
                   <p className="text-[10px] text-muted-foreground">
@@ -138,9 +143,9 @@ export function PropertyEditor() {
               <div className="space-y-4">
                 <div className="space-y-1.5">
                   <Label>KV Namespace Key</Label>
-                  <Input 
-                    placeholder="user_profile_123" 
-                    value={config.key || ''} 
+                  <Input
+                    placeholder="user_profile_123"
+                    value={String(config.key || '')}
                     onChange={(e) => handleUpdate({ key: e.target.value })}
                     className="h-8 text-xs"
                   />
@@ -148,9 +153,9 @@ export function PropertyEditor() {
                 {type === 'KV Put' && (
                   <div className="space-y-1.5">
                     <Label>Value (JSON supported)</Label>
-                    <Textarea 
+                    <Textarea
                       placeholder='{"active": true}'
-                      value={config.value || ''} 
+                      value={String(config.value || '')}
                       onChange={(e) => handleUpdate({ value: e.target.value })}
                       className="h-20 text-xs font-mono"
                     />
@@ -158,16 +163,35 @@ export function PropertyEditor() {
                 )}
               </div>
             )}
-            {/* General Utilities */}
+            {/* Advanced Settings */}
             <div className="pt-4 border-t space-y-4">
-              <div className="space-y-1.5">
-                <Label>Execution Timeout (ms)</Label>
-                <Input 
-                  type="number"
-                  value={config.timeout || 5000} 
-                  onChange={(e) => handleUpdate({ timeout: parseInt(e.target.value) })}
-                  className="h-8 text-xs"
-                />
+              <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                <Shield className="h-3.5 w-3.5" />
+                Advanced
+              </div>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label>Retries</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={5}
+                    value={Number(config.retries ?? 0)}
+                    onChange={(e) => handleUpdate({ retries: parseInt(e.target.value) })}
+                    className="h-8 text-xs"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Timeout (ms)</Label>
+                  <Input
+                    type="number"
+                    min={100}
+                    max={30000}
+                    value={Number(config.timeout ?? 5000)}
+                    onChange={(e) => handleUpdate({ timeout: parseInt(e.target.value) })}
+                    className="h-8 text-xs"
+                  />
+                </div>
               </div>
             </div>
           </section>

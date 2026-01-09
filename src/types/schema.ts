@@ -1,6 +1,5 @@
 import { z } from 'zod';
 export type FlowStatus = 'active' | 'draft' | 'error' | 'disabled';
-// Use a constant array to avoid "Expected 2-3 arguments" Zod error
 export const NODE_CATEGORIES = ['input', 'output', 'function', 'storage', 'social', 'utility'] as const;
 export const NodeCategorySchema = z.enum(NODE_CATEGORIES);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
@@ -24,7 +23,10 @@ export const NodeSchema = z.object({
   category: NodeCategorySchema,
   label: z.string(),
   description: z.string().optional(),
-  config: NodeConfigSchema.default({}),
+  config: NodeConfigSchema.default({
+    retries: 0,
+    timeout: 5000
+  }),
   position: z.object({
     x: z.number(),
     y: z.number(),
@@ -57,4 +59,11 @@ export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
+}
+export interface ExecutionLog {
+  id: string;
+  timestamp: string;
+  level: 'info' | 'warn' | 'error';
+  message: string;
+  nodeId?: string;
 }
