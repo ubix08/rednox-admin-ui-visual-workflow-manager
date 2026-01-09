@@ -51,6 +51,9 @@ export function EditorPage() {
   });
   const saveMutation = useMutation({
     mutationFn: () => {
+      if (editorNodes.length === 0) {
+        throw new Error('Flow must have at least one node');
+      }
       const nodesToSave = editorNodes.map(n => ({
         id: n.id,
         type: (n.data?.type as string) || 'unknown',
@@ -60,6 +63,7 @@ export function EditorPage() {
         config: n.data?.config || {},
       }));
       return workflowApi.update(id!, {
+        name: id!,
         nodes: nodesToSave as any,
         edges: editorEdges as any,
         status: flow?.status ?? 'draft'
@@ -92,19 +96,22 @@ export function EditorPage() {
         }
       });
     }
-  }, [id, isExecuting, addLog]);
+  }, [id, isExecuting, logs, addLog]);
 
   useEffect(() => {
     if (isError && error instanceof Error && error.message?.includes('not found')) {
       createNewMutation.mutate();
+    } else if (isError && error instanceof Error && (error.message?.includes('Flow validation') || error.message?.includes('validation'))) {
+      toast('Loaded as draft (API validation)');
+      initializeEditor(id!, [], []);
     }
-  }, [isError, error, createNewMutation]);
+  }, [isError, error, createNewMutation, initializeEditor, id]);
   useEffect(() => {
     if (!flow?.id) return;
     const initialNodes = (flow.nodes ?? []).map((n: any) => ({
       id: n.id,
       type: 'flowNode',
-      position: n.position || {x:0,y:0},
+      position: { x: (n.position?.x ?? 0) as number, y: (n.position?.y ?? 0) as number },
       data: {
         label: n.label || 'Node',
         type: n.type || 'unknown',
