@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, FolderKanban, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Flow } from '@/types/schema';
 export function DashboardPage() {
   const [search, setSearch] = useState('');
   const { data: flows, isLoading, isError, refetch, isRefetching } = useQuery({
