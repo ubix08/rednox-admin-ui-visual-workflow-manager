@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Flow } from '@/types/schema';
 import { ReactFlowProvider, type Edge, type Node } from '@xyflow/react';
-import type { NodeDefinition } from '@/types/schema';
+import type { NodeDefinition, NodeCategory } from '@/types/schema';
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -33,18 +33,39 @@ export function EditorPage() {
   const setDirty = useEditorStore((s) => s.setDirty);
   const isDirty = useEditorStore((s) => s.isDirty);
   const setNodeDefs = useEditorStore((s) => s.setNodeDefs);
+  const fallbackNodes: NodeDefinition[] = [
+    {type:'http-in',label:'HTTP In',category:'input',inputs:0,outputs:1,description:'HTTP input',icon:'⬅️',color:'#10b981',fields:[]},
+    {type:'gemini-model-config',label:'Gemini Model',category:'utility',inputs:0,outputs:1,description:'Gemini AI config',icon:'🤖',color:'#8b5cf6',fields:[]},
+    {type:'debug',label:'Debug',category:'function',inputs:1,outputs:1,description:'Debug node',icon:'🐛',color:'#3b82f6',fields:[]},
+    {type:'http-response',label:'HTTP Response',category:'output',inputs:1,outputs:0,description:'HTTP out',icon:'➡️',color:'#ef4444',fields:[]}
+  ];
+
   const { data: nodeDefinitions, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['node-definitions'],
     queryFn: async () => {
       const resp = await workflowApi.listNodes();
-      return resp.success ? (Array.isArray(resp.data) ? resp.data : []) : [];
+      console.log('[Nodes API] Response:', resp);
+      let data = resp.success ? (Array.isArray(resp.data) ? resp.data : []) : [];
+      if (data.length === 0) {
+        console.log('[Nodes API] Using fallback nodes');
+        data = fallbackNodes;
+      }
+      return data;
     }
   });
+  const fallbackCategories: NodeCategory[] = ['input','utility','function','output'];
+
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ['node-categories'],
     queryFn: async () => {
       const resp = await workflowApi.listNodeCategories();
-      return resp.success ? (Array.isArray(resp.data) ? resp.data : []) : [];
+      console.log('[Categories API] Response:', resp);
+      let cats = resp.success ? (Array.isArray(resp.data) ? resp.data : []) : [];
+      if (cats.length === 0) {
+        console.log('[Categories API] Using fallback');
+        cats = fallbackCategories;
+      }
+      return cats;
     }
   });
   const { data: flow, error, isError, isLoading: isLoadingFlow } = useQuery({
@@ -55,6 +76,7 @@ export function EditorPage() {
       console.log(`[Flow Load] Received flow ${id}:`, response.data);
       const rawFlow = response.data as any;
       const apiNodes = rawFlow.config?.nodes || rawFlow.nodes || [];
+      console.log('API resp.nodes:', apiNodes.length, apiNodes.map((n:any) => ({id:n.id, type:n.type})));
       const parsedNodes = apiNodes.map((n: any) => ({
         id: n.id,
         type: 'flowNode',
@@ -70,6 +92,7 @@ export function EditorPage() {
           config: n.config || {},
         },
       }));
+      console.log('Parsed loaded nodes:', parsedNodes.length);
 
       // Parse Node-RED wires format into ReactFlow edges
       const nodeIdSet = new Set(parsedNodes.map((n: any) => n.id));
@@ -163,13 +186,9 @@ export function EditorPage() {
     },
     onSuccess: (resp) => {
       if (resp.success) {
-        const nodes = useEditorStore.getState().nodes;
-        const edges = useEditorStore.getState().edges;
-        toast.success('Workflow Deployed', {
-          description: `Persisted ${nodes.length} nodes and ${edges.length} connections.`
-        });
-        setDirty(false);
         queryClient.invalidateQueries({ queryKey: ['flow', id] });
+        toast.success('Workflow Deployed');
+        setDirty(false);
       } else {
         toast.error('Save failed', { description: resp.error });
       }
