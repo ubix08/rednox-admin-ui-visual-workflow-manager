@@ -1,25 +1,18 @@
 import { z } from 'zod';
 export type FlowStatus = 'active' | 'draft' | 'error' | 'disabled';
 export const NODE_CATEGORIES = ['input', 'output', 'function', 'storage', 'social', 'utility'] as const;
+// Environment-specific Zod requires nested unions for more than 3 arguments
 export const NodeCategorySchema = z.union([
-  z.literal('input'),
-  z.literal('output'),
-  z.literal('function'),
-  z.literal('storage'),
-  z.literal('social'),
-  z.literal('utility')
+  z.union([z.literal('input'), z.literal('output'), z.literal('function')]),
+  z.union([z.literal('storage'), z.literal('social'), z.literal('utility')])
 ]);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
 export const NodeFieldSchema = z.object({
   name: z.string(),
   label: z.string(),
   type: z.union([
-    z.literal('text'),
-    z.literal('number'),
-    z.literal('select'),
-    z.literal('boolean'),
-    z.literal('json'),
-    z.literal('code'),
+    z.union([z.literal('text'), z.literal('number'), z.literal('select')]),
+    z.union([z.literal('boolean'), z.literal('json'), z.literal('code')]),
     z.literal('password')
   ]),
   description: z.string().optional(),
@@ -77,9 +70,7 @@ export const FlowSchema = z.object({
   name: z.string().min(1, "Name is required"),
   description: z.string().optional().nullable(),
   status: z.union([
-    z.literal('active'),
-    z.literal('draft'),
-    z.literal('error'),
+    z.union([z.literal('active'), z.literal('draft'), z.literal('error')]),
     z.literal('disabled')
   ]).default('draft'),
   lastExecuted: z.string().optional().nullable(),
@@ -89,21 +80,21 @@ export const FlowSchema = z.object({
   updatedAt: z.string(),
 });
 export type Flow = z.infer<typeof FlowSchema>;
-export interface ApiResponse<T> {
+export type ApiResponse<T> = {
   success: boolean;
   data?: T;
   error?: string;
-}
-export interface ExecutionLog {
+};
+export type ExecutionLog = {
   id: string;
   timestamp: string;
   level: 'info' | 'warn' | 'error';
   message: string;
   nodeId?: string;
-}
-export interface ExecutionResult {
+};
+export type ExecutionResult = {
   success: boolean;
   logs: ExecutionLog[];
   executedAt: string;
   result?: any;
-}
+};

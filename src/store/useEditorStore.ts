@@ -16,7 +16,7 @@ import {
 } from '@xyflow/react';
 import { v4 as uuidv4 } from 'uuid';
 import { ExecutionLog, NodeDefinition } from '@/types/schema';
-interface EditorState {
+type EditorState = {
   nodes: Node[];
   edges: Edge[];
   currentFlowId: string | null;
@@ -31,16 +31,16 @@ interface EditorState {
   onEdgesDelete: OnEdgesDelete;
   onConnect: OnConnect;
   setSelectedNodeId: (id: string | null) => void;
-  addNode: (definition: NodeDefinition, position: { x: number, y: number }) => void;
-  updateNodeData: (id: string, data: any) => void;
+  addNode: (definition: NodeDefinition, position: { x: number; y: number }) => void;
+  updateNodeData: (id: string, data: Record<string, any>) => void;
   deleteNode: (id: string) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
-  addLog: (log: Omit<ExecutionLog, 'id' | 'timestamp'>) => void;
+  addLog: (log: Pick<ExecutionLog, 'level' | 'message' | 'nodeId'>) => void;
   clearLogs: () => void;
   setExecuting: (status: boolean) => void;
   setDirty: (dirty: boolean) => void;
-}
+};
 export const useEditorStore = create<EditorState>((set, get) => ({
   nodes: [],
   edges: [],
@@ -50,14 +50,14 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   isExecuting: false,
   isDirty: false,
   initialize: (flowId, nodes, edges) => {
-    set({ 
-      currentFlowId: flowId, 
-      nodes, 
-      edges, 
-      selectedNodeId: null, 
-      logs: [], 
+    set({
+      currentFlowId: flowId,
+      nodes,
+      edges,
+      selectedNodeId: null,
+      logs: [],
       isExecuting: false,
-      isDirty: false 
+      isDirty: false
     });
   },
   onNodesChange: (changes: NodeChange[]) => {
@@ -112,23 +112,24 @@ export const useEditorStore = create<EditorState>((set, get) => ({
         },
       },
     };
-    set({ 
+    set({
       nodes: [...get().nodes, newNode],
-      isDirty: true 
+      isDirty: true
     });
   },
   updateNodeData: (id, newData) => {
     set({
       nodes: get().nodes.map((node) =>
         node.id === id
-          ? { 
-              ...node, 
-              data: { 
-                ...node.data, 
+          ? {
+              ...node,
+              data: {
+                ...node.data,
                 ...newData,
-                // Ensure config merge if config is being updated
-                config: newData.config ? { ...node.data.config, ...newData.config } : node.data.config
-              } 
+                config: newData.config 
+                  ? { ...(node.data?.config as Record<string, any> || {}), ...newData.config } 
+                  : (node.data?.config as Record<string, any> || {})
+              }
             }
           : node
       ),
@@ -147,7 +148,9 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   setEdges: (edges) => set({ edges, isDirty: true }),
   addLog: (log) => {
     const newLog: ExecutionLog = {
-      ...log,
+      level: log.level,
+      message: log.message,
+      nodeId: log.nodeId,
       id: uuidv4(),
       timestamp: new Date().toLocaleTimeString(),
     };
