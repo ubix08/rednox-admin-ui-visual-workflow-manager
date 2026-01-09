@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AppNavbar } from '@/components/layout/AppNavbar';
 import { ChevronLeft, Save, Play, Settings2, Terminal, Box, Layers, Trash2, Loader2, Clock } from 'lucide-react';
@@ -15,6 +15,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [activeMobileTab, setActiveMobileTab] = useState<'palette' | 'canvas' | 'properties'>('canvas');
   const [isExecutionModalOpen, setExecutionModalOpen] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
@@ -27,7 +28,7 @@ export function EditorPage() {
   const addLog = useEditorStore((s) => s.addLog);
   const clearLogs = useEditorStore((s) => s.clearLogs);
   const isExecuting = useEditorStore((s) => s.isExecuting);
-  const { data: flow, isLoading } = useQuery({
+  const { data: flow, error, isError, isLoading } = useQuery({
     queryKey: ['flow', id],
     queryFn: async () => {
       const response = await workflowApi.get(id!);
@@ -35,6 +36,7 @@ export function EditorPage() {
       return response.data;
     },
     enabled: !!id,
+    retry: false
   });
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -46,8 +48,8 @@ export function EditorPage() {
         position: n.position,
         config: n.data?.config || {},
       }));
-      return workflowApi.update(id!, { 
-        nodes: nodesToSave as any, 
+      return workflowApi.update(id!, {
+        nodes: nodesToSave as any,
         edges: editorEdges as any,
         status: flow?.status || 'draft'
       });
@@ -58,6 +60,16 @@ export function EditorPage() {
       queryClient.invalidateQueries({ queryKey: ['flows'] });
     },
     onError: (err: any) => toast.error(err.message || 'Save failed'),
+  });
+
+  const createNewMutation = useMutation({
+    mutationFn: () => workflowApi.create({ name: `New Flow #${Date.now().toString().slice(-6)}`, description: '', status: 'draft' as const, nodes: [], edges: [] }),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['flows'] });
+      toast.success('New flow created');
+      navigate(`/flow/${response.data.id}`);
+    },
+    onError: (err: any) => toast.error(err.message || 'Failed to create new flow')
   });
   const pollLogs = useCallback(async () => {
     if (!id || !isExecuting) return;
@@ -70,6 +82,12 @@ export function EditorPage() {
       });
     }
   }, [id, isExecuting, addLog, logs]);
+
+  useEffect(() => {
+    if (isError && error instanceof Error && error.message?.includes('not found')) {
+      createNewMutation.mutate();
+    }
+  }, [isError, error, createNewMutation]);
   useEffect(() => {
     if (flow) {
       const initialNodes = flow.nodes.map(n => ({
@@ -101,7 +119,7 @@ export function EditorPage() {
     }
   }, [logs]);
   if (isLoading) return <div className="h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (!flow) return <div className="h-screen flex flex-col items-center justify-center gap-4 bg-background"><h2>Flow not found</h2><Link to="/"><Button>Back to Dashboard</Button></Link></div>;
+  if (createNewMutation.isError) return <div className="h-screen flex flex-col items-center justify-center gap-4 bg-background"><h2>Failed to create flow</h2><Link to="/dashboard"><Button>Back to Dashboard</Button></Link></div>;
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       <AppNavbar />
@@ -111,8 +129,8 @@ export function EditorPage() {
             <Link to="/"><ChevronLeft className="h-4 w-4" /></Link>
           </Button>
           <div>
-            <h2 className="text-sm font-semibold leading-none">{flow.name}</h2>
-            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{flow.status}</span>
+            <h2 className="text-sm font-semibold leading-none">{flow?.name || 'Untitled Flow'}</h2>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{flow?.status || 'draft'}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -198,7 +216,7 @@ export function EditorPage() {
           <Settings2 className="h-4 w-4" /><span className="text-[10px]">Config</span>
         </Button>
       </div>
-      <ExecutionModal open={isExecutionModalOpen} onOpenChange={setExecutionModalOpen} flowId={flow.id} />
+      <ExecutionModal open={isExecutionModalOpen} onOpenChange={setExecutionModalOpen} flowId={flow?.id || ''} />
     </div>
   );
 }

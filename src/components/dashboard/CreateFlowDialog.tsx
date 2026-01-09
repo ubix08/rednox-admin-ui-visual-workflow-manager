@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { v4 as uuidv4 } from 'uuid';
+import { workflowApi } from '@/lib/api';
+import { toast } from 'sonner';
 import { Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -25,7 +27,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { z } from 'zod';
-import { useAppStore } from '@/store/useAppStore';
 const formSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
   description: z.string().optional(),
@@ -33,8 +34,8 @@ const formSchema = z.object({
 export function CreateFlowDialog() {
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const addFlow = useAppStore((s) => s.addFlow);
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -42,26 +43,28 @@ export function CreateFlowDialog() {
       description: "",
     },
   });
-  const onSubmit = (values: z.infer<typeof formSchema>) => {
+  const onSubmit = async (values: z.infer<typeof formSchema>) => {
     setIsSubmitting(true);
-    const id = uuidv4();
-    const newFlow = {
-      id,
-      ...values,
-      status: 'draft' as const,
-      nodes: [],
-      edges: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    // Perform operations in the handler, not render body
-    addFlow(newFlow);
-    // Defer state updates to ensure cleanup
-    setTimeout(() => {
+    try {
+      const response = await workflowApi.create({
+        name: values.name,
+        description: values.description || '',
+        status: 'draft' as const,
+        nodes: [],
+        edges: [],
+      });
+      if (!response.success) {
+        throw new Error(response.error || 'Failed to create flow');
+      }
+      queryClient.invalidateQueries({ queryKey: ['flows'] });
+      toast.success('Flow created successfully');
+      navigate(`/flow/${response.data.id}`);
       setOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to create flow');
+    } finally {
       setIsSubmitting(false);
-      navigate(`/flow/${id}`);
-    }, 300);
+    }
   };
   return (
     <Dialog open={open} onOpenChange={(val) => !isSubmitting && setOpen(val)}>
