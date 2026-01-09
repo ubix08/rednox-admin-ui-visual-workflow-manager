@@ -77,12 +77,7 @@ function updateWranglerJsonc() {
 }
 
 function runSetupCommands() {
-    const commands = [
-    "bun add reactflow@^11.11.4",
-    "bun install @xyflow/react",
-    "bun install uuid",
-    "bun install @tanstack/react-query"
-];
+    const commands = [];
     
     if (commands.length === 0) {
         console.log('⊘ No setup commands to run');
