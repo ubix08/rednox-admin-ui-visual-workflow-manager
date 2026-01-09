@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus } from 'lucide-react';
+import { Plus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -31,7 +31,8 @@ const formSchema = z.object({
   description: z.string().optional(),
 });
 export function CreateFlowDialog() {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const addFlow = useAppStore((s) => s.addFlow);
   const navigate = useNavigate();
   const form = useForm<z.infer<typeof formSchema>>({
@@ -41,7 +42,8 @@ export function CreateFlowDialog() {
       description: "",
     },
   });
-  function onSubmit(values: z.infer<typeof formSchema>) {
+  const onSubmit = (values: z.infer<typeof formSchema>) => {
+    setIsSubmitting(true);
     const id = uuidv4();
     const newFlow = {
       id,
@@ -52,14 +54,19 @@ export function CreateFlowDialog() {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+    // Perform operations in the handler, not render body
     addFlow(newFlow);
-    setOpen(false);
-    navigate(`/flow/${id}`);
-  }
+    // Defer state updates to ensure cleanup
+    setTimeout(() => {
+      setOpen(false);
+      setIsSubmitting(false);
+      navigate(`/flow/${id}`);
+    }, 300);
+  };
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={(val) => !isSubmitting && setOpen(val)}>
       <DialogTrigger asChild>
-        <Button className="gap-2">
+        <Button className="gap-2 shadow-sm hover:shadow-md transition-shadow">
           <Plus className="h-4 w-4" />
           Create New Flow
         </Button>
@@ -78,9 +85,9 @@ export function CreateFlowDialog() {
               name="name"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Name</FormLabel>
+                  <FormLabel className="text-foreground">Name</FormLabel>
                   <FormControl>
-                    <Input placeholder="E.g. Daily Data Sync" {...field} />
+                    <Input placeholder="E.g. Daily Data Sync" disabled={isSubmitting} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -91,12 +98,13 @@ export function CreateFlowDialog() {
               name="description"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Description (Optional)</FormLabel>
+                  <FormLabel className="text-foreground">Description (Optional)</FormLabel>
                   <FormControl>
-                    <Textarea 
-                      placeholder="Explain what this flow does..." 
-                      className="resize-none" 
-                      {...field} 
+                    <Textarea
+                      placeholder="Explain what this flow does..."
+                      className="resize-none"
+                      disabled={isSubmitting}
+                      {...field}
                     />
                   </FormControl>
                   <FormMessage />
@@ -104,7 +112,16 @@ export function CreateFlowDialog() {
               )}
             />
             <DialogFooter className="pt-4">
-              <Button type="submit" className="w-full">Initialize Editor</Button>
+              <Button type="submit" className="w-full gap-2" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Preparing Canvas...
+                  </>
+                ) : (
+                  "Initialize Editor"
+                )}
+              </Button>
             </DialogFooter>
           </form>
         </Form>
