@@ -1,24 +1,25 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
-import { Box, Play, Database, Zap, Terminal, Globe, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Box, Play, Database, Zap, Terminal, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useEditorStore } from '@/store/useEditorStore';
-const categoryConfig: Record<string, { color: string, icon: React.ElementType }> = {
-  input: { color: 'bg-emerald-500', icon: Play },
-  output: { color: 'bg-red-500', icon: Zap },
-  function: { color: 'bg-blue-500', icon: Terminal },
-  storage: { color: 'bg-amber-500', icon: Database },
-  utility: { color: 'bg-slate-500', icon: Box },
+const DEFAULT_ICONS: Record<string, React.ElementType> = {
+  input: Play,
+  output: Zap,
+  function: Terminal,
+  storage: Database,
+  utility: Box,
 };
 export const FlowNode = memo(({ id, data, selected }: NodeProps) => {
   const isExecuting = useEditorStore((s) => s.isExecuting);
   const logs = useEditorStore((s) => s.logs);
   const category = (data.category as string) || 'function';
   const label = (data.label as string) || 'Node';
+  const icon = data.icon as string;
+  const color = data.color as string;
   const config = (data.config as any) || {};
-  const theme = categoryConfig[category] || categoryConfig.function;
-  const Icon = theme.icon;
+  const IconComponent = DEFAULT_ICONS[category] || DEFAULT_ICONS.function;
   // Derive node status from logs
   const nodeLogs = logs.filter(l => l.nodeId === id);
   const hasError = nodeLogs.some(l => l.level === 'error');
@@ -34,23 +35,27 @@ export const FlowNode = memo(({ id, data, selected }: NodeProps) => {
         isSuccess && "border-emerald-500/50"
       )}
     >
-      {/* Left accent bar */}
-      <div className={cn("w-2 h-full absolute left-0 top-0", theme.color)} />
-      <div className="flex items-center gap-3 px-3 py-2.5 ml-2 w-full">
-        <div className={cn("p-1.5 rounded-sm text-white shrink-0 shadow-sm transition-transform", isExecuting && isLastExecuted && "scale-110", theme.color)}>
-          <Icon className="h-4 w-4" />
+      {/* Dynamic Left accent bar */}
+      <div className={cn("w-1.5 h-full absolute left-0 top-0", color || "bg-primary/20")} />
+      <div className="flex items-center gap-3 px-3 py-2.5 ml-1 w-full">
+        <div className={cn(
+          "flex h-8 w-8 items-center justify-center rounded shrink-0 shadow-sm transition-transform text-lg",
+          isExecuting && isLastExecuted && "scale-110",
+          color || "bg-muted"
+        )}>
+          {icon && icon.length < 3 ? icon : <IconComponent className="h-4 w-4" />}
         </div>
         <div className="flex flex-col min-w-0 flex-1">
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <span className="text-xs font-semibold text-foreground truncate">{label}</span>
+                <span className="text-xs font-semibold text-foreground truncate leading-tight">{label}</span>
               </TooltipTrigger>
               <TooltipContent>{label}</TooltipContent>
             </Tooltip>
           </TooltipProvider>
           <div className="flex items-center gap-1">
-            <span className="text-[9px] text-muted-foreground capitalize">{category}</span>
+            <span className="text-[9px] text-muted-foreground capitalize font-medium">{category}</span>
             {config.method && (
               <>
                 <span className="text-[9px] text-muted-foreground/30">•</span>
@@ -68,7 +73,7 @@ export const FlowNode = memo(({ id, data, selected }: NodeProps) => {
         {/* Runtime Indicators */}
         <div className="flex items-center gap-1 absolute top-1 right-1">
           {isExecuting && isLastExecuted && (
-            <span className="flex h-2 w-2 rounded-full bg-blue-500 animate-ping" />
+            <span className="flex h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
           )}
           {hasError && (
             <AlertCircle className="h-3 w-3 text-red-500" />
@@ -81,12 +86,12 @@ export const FlowNode = memo(({ id, data, selected }: NodeProps) => {
       <Handle
         type="target"
         position={Position.Left}
-        className="w-3 h-3 -left-1.5 bg-background border-2 border-muted-foreground hover:scale-125 transition-transform"
+        className="w-2.5 h-2.5 -left-1.25 bg-background border-2 border-muted-foreground/50 hover:border-primary transition-colors"
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="w-3 h-3 -right-1.5 bg-background border-2 border-muted-foreground hover:scale-125 transition-transform"
+        className="w-2.5 h-2.5 -right-1.25 bg-background border-2 border-muted-foreground/50 hover:border-primary transition-colors"
       />
     </div>
   );

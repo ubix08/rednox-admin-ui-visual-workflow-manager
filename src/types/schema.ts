@@ -1,18 +1,39 @@
 import { z } from 'zod';
 export type FlowStatus = 'active' | 'draft' | 'error' | 'disabled';
 export const NODE_CATEGORIES = ['input', 'output', 'function', 'storage', 'social', 'utility'] as const;
-// Using z.enum with the readonly array directly is the standard way to handle this in Zod
-export const NodeCategorySchema = z.enum(NODE_CATEGORIES);
+// Fix: Use z.enum with a casted readonly array or direct strings to avoid the 2-3 arguments error
+export const NodeCategorySchema = z.enum(['input', 'output', 'function', 'storage', 'social', 'utility']);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
-export const NodeConfigSchema = z.object({
-  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).optional(),
-  path: z.string().optional(),
-  code: z.string().optional(),
-  key: z.string().optional(),
-  value: z.string().optional(),
-  retries: z.number().min(0).max(5).default(0),
-  timeout: z.number().min(100).max(30000).default(5000),
-}).passthrough();
+export const NodeFieldSchema = z.object({
+  name: z.string(),
+  label: z.string(),
+  type: z.enum(['text', 'number', 'select', 'boolean', 'json', 'code', 'password']),
+  description: z.string().optional(),
+  placeholder: z.string().optional(),
+  default: z.any().optional(),
+  required: z.boolean().optional().default(false),
+  options: z.array(z.object({
+    label: z.string(),
+    value: z.any()
+  })).optional(),
+  rows: z.number().optional()
+});
+export type NodeField = z.infer<typeof NodeFieldSchema>;
+export const NodeDefinitionSchema = z.object({
+  type: z.string(),
+  category: NodeCategorySchema,
+  label: z.string(),
+  paletteLabel: z.string().optional(),
+  description: z.string().optional(),
+  icon: z.string().optional(), // Emoji or Lucide icon name
+  color: z.string().optional(), // Hex or tailwind class
+  fields: z.array(NodeFieldSchema).default([]),
+  defaultConfig: z.record(z.any()).optional(),
+  inputs: z.number().default(1),
+  outputs: z.number().default(1)
+});
+export type NodeDefinition = z.infer<typeof NodeDefinitionSchema>;
+export const NodeConfigSchema = z.record(z.any()).default({});
 export type NodeConfig = z.infer<typeof NodeConfigSchema>;
 export const NodeSchema = z.object({
   id: z.string(),
@@ -20,10 +41,7 @@ export const NodeSchema = z.object({
   category: NodeCategorySchema.optional().default('function'),
   label: z.string(),
   description: z.string().optional(),
-  config: NodeConfigSchema.default({
-    retries: 0,
-    timeout: 5000
-  }),
+  config: NodeConfigSchema,
   position: z.object({
     x: z.number(),
     y: z.number(),

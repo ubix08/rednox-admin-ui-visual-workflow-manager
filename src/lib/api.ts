@@ -1,4 +1,4 @@
-import { ApiResponse, Flow, ExecutionResult, ExecutionLog } from '@/types/schema';
+import { ApiResponse, Flow, ExecutionResult, ExecutionLog, NodeDefinition, NodeCategory } from '@/types/schema';
 const BASE_URL = 'https://rednox.ubixsnow08.workers.dev';
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<ApiResponse<T>> {
   try {
@@ -12,18 +12,16 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<Api
     const data = await response.json().catch(() => null);
     if (!response.ok) {
       console.warn(`[API Warning] ${response.status} ${endpoint}:`, data);
-      return { 
-        success: false, 
-        error: data?.error || data?.message || response.statusText 
+      return {
+        success: false,
+        error: data?.error || data?.message || response.statusText
       };
     }
-    // Handle standard RedNox envelope { success: true, data: ... } 
-    // or direct data return if backend varies
     if (data && typeof data === 'object' && 'success' in data) {
-      return { 
-        success: data.success, 
-        data: data.data ?? data, 
-        error: data.error 
+      return {
+        success: data.success,
+        data: data.data ?? data,
+        error: data.error
       };
     }
     return { success: true, data: data as T };
@@ -33,6 +31,7 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<Api
   }
 }
 export const workflowApi = {
+  // Workflows
   list: () => apiFetch<Flow[]>('/admin/flows'),
   create: (flowData: Partial<Flow>) =>
     apiFetch<Flow>('/admin/flows', {
@@ -57,6 +56,11 @@ export const workflowApi = {
     apiFetch<void>(`/admin/flows/${id}/disable`, {
       method: 'POST',
     }),
+  // Nodes Metadata
+  listNodes: () => apiFetch<NodeDefinition[]>('/admin/nodes'),
+  listNodeCategories: () => apiFetch<NodeCategory[]>('/admin/nodes/categories'),
+  getNodeDefinition: (type: string) => apiFetch<NodeDefinition>(`/admin/nodes/${type}`),
+  // Execution
   execute: (id: string, body: { nodeId?: string | null; payload: any }) =>
     apiFetch<ExecutionResult>(`/admin/flows/${id}/execute`, {
       method: 'POST',

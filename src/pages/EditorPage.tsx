@@ -22,38 +22,47 @@ export function EditorPage() {
   const [isExecutionModalOpen, setExecutionModalOpen] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
-  // Zustand Store Selectors (One per call)
+  // Zustand Store Selectors
   const initializeEditor = useEditorStore((s) => s.initialize);
   const editorNodes = useEditorStore((s) => s.nodes);
   const editorEdges = useEditorStore((s) => s.edges);
   const logs = useEditorStore((s) => s.logs);
   const clearLogs = useEditorStore((s) => s.clearLogs);
   const isExecuting = useEditorStore((s) => s.isExecuting);
-  const { data: flow, error, isError, isLoading } = useQuery({
+  // Fetch available nodes and categories for the palette
+  const { data: nodeDefinitions, isLoading: isLoadingNodes } = useQuery({
+    queryKey: ['node-definitions'],
+    queryFn: async () => {
+      const resp = await workflowApi.listNodes();
+      return resp.success ? resp.data : [];
+    }
+  });
+  const { data: categories, isLoading: isLoadingCategories } = useQuery({
+    queryKey: ['node-categories'],
+    queryFn: async () => {
+      const resp = await workflowApi.listNodeCategories();
+      return resp.success ? resp.data : [];
+    }
+  });
+  const { data: flow, error, isError, isLoading: isLoadingFlow } = useQuery({
     queryKey: ['flow', id],
     queryFn: async () => {
       const response = await workflowApi.get(id!);
       if (!response.success) throw new Error(response.error);
       const rawFlow = response.data as any;
-      
-      const getCategory = (type: string): string => {
-        if (type.includes('http-in') || type.includes('http')) return 'input';
-        if (type.includes('response') || type.includes('out')) return 'output';
-        if (type.includes('kv') || type.includes('memory')) return 'storage';
-        if (type.includes('gemini') || type.includes('javascript') || type.includes('condition') || type.includes('-model-')) return 'function';
-        return 'utility';
-      };
-      
       const apiNodes = rawFlow.config?.nodes || rawFlow.nodes || [];
       const parsedNodes = apiNodes.map((n: any) => ({
         id: n.id,
-        type: n.type || 'unknown',
-        label: n.name || n.label || n.type || 'Node',
-        category: n.category || getCategory(n.type),
+        type: 'flowNode',
         position: { x: Number(n.x ?? n.position?.x ?? 250), y: Number(n.y ?? n.position?.y ?? 100) },
-        config: Object.fromEntries(Object.entries(n).filter(([k]) => !['id','type','name','label','category','x','y','position','wires','source','target','handle'].includes(k))),
+        data: {
+          id: n.id,
+          label: n.label || n.name || n.type || 'Node',
+          type: n.type,
+          category: n.category || 'function',
+          config: n.config || {},
+        },
       }));
-      
       return {
         id: rawFlow.id,
         name: rawFlow.name || 'Untitled Flow',
@@ -70,153 +79,59 @@ export function EditorPage() {
   });
   const saveMutation = useMutation({
     mutationFn: () => {
-      if (editorNodes.length === 0) {
-        throw new Error('Flow must have at least one node');
-      }
-      const currentFlow = queryClient.getQueryData(['flow', id]) as Flow | undefined;
+      if (editorNodes.length === 0) throw new Error('Flow must have at least one node');
       const nodesToSave = editorNodes.map(n => ({
         id: n.id,
-        type: (n.data?.type as string) || 'unknown',
-        category: (n.data?.category as any) || 'function',
-        label: (n.data?.label as string) || 'Node',
-        position: n.position,
+        type: n.data?.type || 'unknown',
+        category: n.data?.category || 'function',
+        label: n.data?.label || 'Node',
+        x: n.position.x,
+        y: n.position.y,
         config: n.data?.config || {},
       }));
       return workflowApi.update(id!, {
-        name: currentFlow?.name ?? 'Untitled Flow',
+        name: flow?.name ?? 'Untitled Flow',
         nodes: nodesToSave as any,
         edges: editorEdges as any,
-        status: currentFlow?.status ?? 'draft'
+        status: flow?.status ?? 'draft'
       });
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       toast.success('Workflow deployed');
       queryClient.invalidateQueries({ queryKey: ['flow', id] });
-      queryClient.invalidateQueries({ queryKey: ['flows'] });
     },
     onError: (err: any) => toast.error(err.message || 'Save failed'),
-  });
-
-  const createNewMutation = useMutation({
-    mutationFn: () => workflowApi.create({ name: `New Flow #${Date.now().toString().slice(-6)}`, description: '', status: 'draft' as const, nodes: [], edges: [] }),
-    onSuccess: (response) => {
-      queryClient.invalidateQueries({ queryKey: ['flows'] });
-      toast.success('New flow created');
-      navigate(`/flow/${response.data.id}`);
-    },
-    onError: (err: any) => toast.error(err.message || 'Failed to create new flow')
   });
   const pollLogs = useCallback(async () => {
     if (!id || !isExecuting) return;
     const response = await workflowApi.getDebugLogs(id, 10);
     if (response.success && Array.isArray(response.data)) {
-      // Snapshot current logs for stable deduplication during this poll cycle
       const currentLogs = useEditorStore.getState().logs;
       response.data.reverse().forEach(log => {
-        // Deduplicate logs before adding to prevent duplicates from polling
         if (!currentLogs.find(l => l.id === log.id)) useEditorStore.getState().addLog(log);
       });
     }
   }, [id, isExecuting]);
-
   useEffect(() => {
     if (isError && error instanceof Error && error.message?.includes('not found')) {
-      createNewMutation.mutate();
-    } else if (isError && error instanceof Error && (error.message?.includes('Flow validation') || error.message?.includes('validation'))) {
-      toast('Loaded as draft (API validation)');
-      initializeEditor(id!, [], []);
+      navigate('/');
     }
-  }, [isError, error, createNewMutation, initializeEditor, id]);
+  }, [isError, error, navigate]);
   useEffect(() => {
     if (!flow?.id) return;
-    const initialNodes = (flow.nodes ?? []).map((n: any) => ({
-      id: n.id,
-      type: 'flowNode',
-      position: { x: (n.position?.x ?? 0) as number, y: (n.position?.y ?? 0) as number },
-      data: {
-        label: n.label || 'Node',
-        type: n.type || 'unknown',
-        category: n.category || 'function',
-        config: n.config || {}
-      },
-    })) as any[];
-
-    let initialEdges = flow.edges ?? [];
-
-    // Generate demo flow if canvas is empty
-    if (initialNodes.length === 0 && initialEdges.length === 0) {
-      const httpInId = uuidv4();
-      const functionId = uuidv4();
-      const httpOutId = uuidv4();
-
-      initialNodes.push(
-        {
-          id: httpInId,
-          type: 'flowNode',
-          position: { x: 200, y: 100 },
-          data: {
-            label: 'HTTP In',
-            type: 'HTTP In',
-            category: 'input',
-            config: { method: 'POST', path: '/webhook' }
-          }
-        },
-        {
-          id: functionId,
-          type: 'flowNode',
-          position: { x: 450, y: 100 },
-          data: {
-            label: 'JavaScript',
-            type: 'JavaScript',
-            category: 'function',
-            config: { code: '// Demo\nreturn { msg: "processed" };' }
-          }
-        },
-        {
-          id: httpOutId,
-          type: 'flowNode',
-          position: { x: 700, y: 100 },
-          data: {
-            label: 'HTTP Response',
-            type: 'HTTP Response',
-            category: 'output',
-            config: {}
-          }
-        }
-      );
-
-      initialEdges.push(
-        {
-          id: uuidv4(),
-          source: httpInId,
-          target: functionId
-        },
-        {
-          id: uuidv4(),
-          source: functionId,
-          target: httpOutId
-        }
-      );
-    }
-
-    initializeEditor(flow.id, initialNodes, initialEdges);
-  }, [flow?.id, initializeEditor]);
+    initializeEditor(flow.id, flow.nodes as any[], flow.edges as any[]);
+  }, [flow?.id, flow?.nodes, flow?.edges, initializeEditor]);
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (isExecuting) {
       interval = setInterval(pollLogs, 2500);
     }
-    return () => {
-      if (interval) clearInterval(interval);
-    };
+    return () => { if (interval) clearInterval(interval); };
   }, [isExecuting, pollLogs]);
   useEffect(() => {
-    if (logEndRef.current) {
-      logEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
-  if (isLoading) return <div className="h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
-  if (createNewMutation.isError) return <div className="h-screen flex flex-col items-center justify-center gap-4 bg-background"><h2>Failed to create flow</h2><Link to="/dashboard"><Button>Back to Dashboard</Button></Link></div>;
+  if (isLoadingFlow) return <div className="h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       <AppNavbar />
@@ -243,7 +158,7 @@ export function EditorPage() {
       </div>
       <div className="flex-1 flex overflow-hidden relative">
         <aside className={cn("absolute inset-0 z-30 bg-background transition-transform duration-300 md:relative md:translate-x-0 md:flex md:w-64 md:border-r md:shadow-sm", activeMobileTab === 'palette' ? "translate-x-0" : "-translate-x-full")}>
-          <NodePalette />
+          <NodePalette definitions={nodeDefinitions} categories={categories} isLoading={isLoadingNodes || isLoadingCategories} />
         </aside>
         <main className="flex-1 relative overflow-hidden bg-muted/10">
           <WorkflowCanvas />
@@ -252,10 +167,10 @@ export function EditorPage() {
           <Tabs defaultValue="properties" className="flex-1 flex flex-col h-full">
             <div className="px-2 pt-2 border-b">
               <TabsList className="w-full justify-start h-9 bg-transparent p-0 gap-1">
-                <TabsTrigger value="properties" className="data-[state=active]:bg-background data-[state=active]:border border-transparent px-3 py-1 text-xs">
+                <TabsTrigger value="properties" className="data-[state=active]:bg-background px-3 py-1 text-xs">
                   <Settings2 className="h-3.5 w-3.5 mr-2" /> Properties
                 </TabsTrigger>
-                <TabsTrigger value="debug" className="data-[state=active]:bg-background data-[state=active]:border border-transparent px-3 py-1 text-xs relative">
+                <TabsTrigger value="debug" className="data-[state=active]:bg-background px-3 py-1 text-xs relative">
                   <Terminal className="h-3.5 w-3.5 mr-2" /> Debug
                   {isExecuting && <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />}
                 </TabsTrigger>
@@ -276,9 +191,9 @@ export function EditorPage() {
                     <div key={log.id} className="border-l-2 border-slate-800 pl-3 py-1">
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className={cn(
-                          "uppercase text-[9px] font-bold px-1 rounded", 
-                          log.level === 'info' && "bg-blue-500/20 text-blue-400", 
-                          log.level === 'warn' && "bg-amber-500/20 text-amber-400", 
+                          "uppercase text-[9px] font-bold px-1 rounded",
+                          log.level === 'info' && "bg-blue-500/20 text-blue-400",
+                          log.level === 'warn' && "bg-amber-500/20 text-amber-400",
                           log.level === 'error' && "bg-red-500/20 text-red-400"
                         )}>
                           {log.level}

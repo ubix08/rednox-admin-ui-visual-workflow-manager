@@ -13,7 +13,7 @@ import {
   EdgeChange
 } from '@xyflow/react';
 import { v4 as uuidv4 } from 'uuid';
-import { ExecutionLog } from '@/types/schema';
+import { ExecutionLog, NodeDefinition } from '@/types/schema';
 interface EditorState {
   nodes: Node[];
   edges: Edge[];
@@ -26,7 +26,7 @@ interface EditorState {
   onEdgesChange: OnEdgesChange;
   onConnect: OnConnect;
   setSelectedNodeId: (id: string | null) => void;
-  addNode: (type: string, position: { x: number, y: number }, label: string) => void;
+  addNode: (definition: NodeDefinition, position: { x: number, y: number }) => void;
   updateNodeData: (id: string, data: any) => void;
   deleteNode: (id: string) => void;
   setNodes: (nodes: Node[]) => void;
@@ -62,30 +62,21 @@ export const useEditorStore = create<EditorState>((set, get) => ({
     });
   },
   setSelectedNodeId: (id) => set({ selectedNodeId: id }),
-  addNode: (type, position, label) => {
-    const categoryMap: Record<string, string> = {
-      'HTTP In': 'input',
-      'Webhook': 'input',
-      'Cron Timer': 'input',
-      'HTTP Response': 'output',
-      'Slack Post': 'output',
-      'KV Put': 'storage',
-      'KV Get': 'storage',
-      'JavaScript': 'function',
-      'Condition': 'function',
-    };
+  addNode: (def, position) => {
     const newNode: Node = {
       id: uuidv4(),
       type: 'flowNode',
       position,
       data: {
-        label,
-        type,
-        category: categoryMap[type] || 'function',
+        label: def.label,
+        type: def.type,
+        category: def.category,
+        icon: def.icon,
+        color: def.color,
         config: {
           retries: 0,
           timeout: 5000,
-          ...(type === 'HTTP In' ? { method: 'GET', path: '/api/trigger' } : {})
+          ...(def.defaultConfig || {})
         },
       },
     };
@@ -122,3 +113,8 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   clearLogs: () => set({ logs: [] }),
   setExecuting: (status) => set({ isExecuting: status }),
 }));
+// Fixing the AppState lint error by making it an object type instead of empty interface
+export type AppState = {
+  // Global settings for the app can go here later
+  lastVisitedFlowId?: string;
+};
