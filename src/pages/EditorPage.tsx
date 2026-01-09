@@ -35,6 +35,25 @@ export function EditorPage() {
       const response = await workflowApi.get(id!);
       if (!response.success) throw new Error(response.error);
       const rawFlow = response.data as any;
+      
+      const getCategory = (type: string): string => {
+        if (type.includes('http-in') || type.includes('http')) return 'input';
+        if (type.includes('response') || type.includes('out')) return 'output';
+        if (type.includes('kv') || type.includes('memory')) return 'storage';
+        if (type.includes('gemini') || type.includes('javascript') || type.includes('condition') || type.includes('-model-')) return 'function';
+        return 'utility';
+      };
+      
+      const apiNodes = rawFlow.config?.nodes || rawFlow.nodes || [];
+      const parsedNodes = apiNodes.map((n: any) => ({
+        id: n.id,
+        type: n.type || 'unknown',
+        label: n.name || n.label || n.type || 'Node',
+        category: n.category || getCategory(n.type),
+        position: { x: Number(n.x ?? n.position?.x ?? 250), y: Number(n.y ?? n.position?.y ?? 100) },
+        config: Object.fromEntries(Object.entries(n).filter(([k]) => !['id','type','name','label','category','x','y','position','wires','source','target','handle'].includes(k))),
+      }));
+      
       return {
         id: rawFlow.id,
         name: rawFlow.name || 'Untitled Flow',
@@ -42,8 +61,8 @@ export function EditorPage() {
         status: rawFlow.enabled === 1 ? 'active' : (rawFlow.status || 'draft'),
         createdAt: rawFlow.created_at || rawFlow.createdAt || new Date().toISOString(),
         updatedAt: rawFlow.updated_at || rawFlow.updatedAt || new Date().toISOString(),
-        nodes: Array.isArray(rawFlow.nodes) ? rawFlow.nodes : [],
-        edges: Array.isArray(rawFlow.edges) ? rawFlow.edges : []
+        nodes: parsedNodes,
+        edges: rawFlow.config?.edges || rawFlow.edges || []
       } as Flow;
     },
     enabled: !!id,
@@ -54,7 +73,7 @@ export function EditorPage() {
       if (editorNodes.length === 0) {
         throw new Error('Flow must have at least one node');
       }
-      const currentFlow = queryClient.getQueryData(['flow', id]);
+      const currentFlow = queryClient.getQueryData(['flow', id]) as Flow | undefined;
       const nodesToSave = editorNodes.map(n => ({
         id: n.id,
         type: (n.data?.type as string) || 'unknown',
@@ -120,15 +139,16 @@ export function EditorPage() {
         category: n.category || 'function',
         config: n.config || {}
       },
-    }));
-    const initialEdges = flow.edges ?? [];
+    })) as any[];
+
+    let initialEdges = flow.edges ?? [];
 
     // Generate demo flow if canvas is empty
     if (initialNodes.length === 0 && initialEdges.length === 0) {
       const httpInId = uuidv4();
       const functionId = uuidv4();
       const httpOutId = uuidv4();
-      
+
       initialNodes.push(
         {
           id: httpInId,
@@ -164,7 +184,7 @@ export function EditorPage() {
           }
         }
       );
-      
+
       initialEdges.push(
         {
           id: uuidv4(),
@@ -180,7 +200,7 @@ export function EditorPage() {
     }
 
     initializeEditor(flow.id, initialNodes, initialEdges);
-  }, [flow, initializeEditor]);
+  }, [flow?.id, initializeEditor]);
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (isExecuting) {

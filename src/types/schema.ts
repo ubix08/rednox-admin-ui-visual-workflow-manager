@@ -12,12 +12,12 @@ export const NodeConfigSchema = z.object({
   value: z.string().optional(),
   retries: z.number().min(0).max(5).default(0),
   timeout: z.number().min(100).max(30000).default(5000),
-}).catchall(z.any());
+}).passthrough();
 export type NodeConfig = z.infer<typeof NodeConfigSchema>;
 export const NodeSchema = z.object({
   id: z.string(),
   type: z.string(),
-  category: NodeCategorySchema,
+  category: NodeCategorySchema.optional().default('function'),
   label: z.string(),
   description: z.string().optional(),
   config: NodeConfigSchema.default({
