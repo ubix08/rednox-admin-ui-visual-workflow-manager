@@ -13,6 +13,7 @@ import { ExecutionModal } from '@/components/editor/ExecutionModal';
 import { workflowApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { v4 as uuidv4 } from 'uuid';
 import { Flow } from '@/types/schema';
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +27,6 @@ export function EditorPage() {
   const editorNodes = useEditorStore((s) => s.nodes);
   const editorEdges = useEditorStore((s) => s.edges);
   const logs = useEditorStore((s) => s.logs);
-  const addLog = useEditorStore((s) => s.addLog);
   const clearLogs = useEditorStore((s) => s.clearLogs);
   const isExecuting = useEditorStore((s) => s.isExecuting);
   const { data: flow, error, isError, isLoading } = useQuery({
@@ -54,6 +54,7 @@ export function EditorPage() {
       if (editorNodes.length === 0) {
         throw new Error('Flow must have at least one node');
       }
+      const currentFlow = queryClient.getQueryData(['flow', id]);
       const nodesToSave = editorNodes.map(n => ({
         id: n.id,
         type: (n.data?.type as string) || 'unknown',
@@ -63,13 +64,13 @@ export function EditorPage() {
         config: n.data?.config || {},
       }));
       return workflowApi.update(id!, {
-        name: id!,
+        name: currentFlow?.name ?? 'Untitled Flow',
         nodes: nodesToSave as any,
         edges: editorEdges as any,
-        status: flow?.status ?? 'draft'
+        status: currentFlow?.status ?? 'draft'
       });
     },
-    onSuccess: () => {
+    onSuccess: (_, variables) => {
       toast.success('Workflow deployed');
       queryClient.invalidateQueries({ queryKey: ['flow', id] });
       queryClient.invalidateQueries({ queryKey: ['flows'] });
@@ -90,13 +91,14 @@ export function EditorPage() {
     if (!id || !isExecuting) return;
     const response = await workflowApi.getDebugLogs(id, 10);
     if (response.success && Array.isArray(response.data)) {
+      // Snapshot current logs for stable deduplication during this poll cycle
+      const currentLogs = useEditorStore.getState().logs;
       response.data.reverse().forEach(log => {
-        if (!logs.find(l => l.id === log.id)) {
-          addLog(log);
-        }
+        // Deduplicate logs before adding to prevent duplicates from polling
+        if (!currentLogs.find(l => l.id === log.id)) useEditorStore.getState().addLog(log);
       });
     }
-  }, [id, isExecuting, logs, addLog]);
+  }, [id, isExecuting]);
 
   useEffect(() => {
     if (isError && error instanceof Error && error.message?.includes('not found')) {
@@ -120,6 +122,63 @@ export function EditorPage() {
       },
     }));
     const initialEdges = flow.edges ?? [];
+
+    // Generate demo flow if canvas is empty
+    if (initialNodes.length === 0 && initialEdges.length === 0) {
+      const httpInId = uuidv4();
+      const functionId = uuidv4();
+      const httpOutId = uuidv4();
+      
+      initialNodes.push(
+        {
+          id: httpInId,
+          type: 'flowNode',
+          position: { x: 200, y: 100 },
+          data: {
+            label: 'HTTP In',
+            type: 'HTTP In',
+            category: 'input',
+            config: { method: 'POST', path: '/webhook' }
+          }
+        },
+        {
+          id: functionId,
+          type: 'flowNode',
+          position: { x: 450, y: 100 },
+          data: {
+            label: 'JavaScript',
+            type: 'JavaScript',
+            category: 'function',
+            config: { code: '// Demo\nreturn { msg: "processed" };' }
+          }
+        },
+        {
+          id: httpOutId,
+          type: 'flowNode',
+          position: { x: 700, y: 100 },
+          data: {
+            label: 'HTTP Response',
+            type: 'HTTP Response',
+            category: 'output',
+            config: {}
+          }
+        }
+      );
+      
+      initialEdges.push(
+        {
+          id: uuidv4(),
+          source: httpInId,
+          target: functionId
+        },
+        {
+          id: uuidv4(),
+          source: functionId,
+          target: httpOutId
+        }
+      );
+    }
+
     initializeEditor(flow.id, initialNodes, initialEdges);
   }, [flow, initializeEditor]);
   useEffect(() => {
