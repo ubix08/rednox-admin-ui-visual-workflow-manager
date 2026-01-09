@@ -1,17 +1,31 @@
 import { z } from 'zod';
 export type FlowStatus = 'active' | 'draft' | 'error' | 'disabled';
 export const NODE_CATEGORIES = ['input', 'output', 'function', 'storage', 'social', 'utility'] as const;
-// Fix: Zod enum requires a non-empty tuple [string, ...string[]]
-export const NodeCategorySchema = z.enum(['input', 'output', 'function', 'storage', 'social', 'utility'] as [string, ...string[]]);
+export const NodeCategorySchema = z.union([
+  z.literal('input'),
+  z.literal('output'),
+  z.literal('function'),
+  z.literal('storage'),
+  z.literal('social'),
+  z.literal('utility')
+]);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
 export const NodeFieldSchema = z.object({
   name: z.string(),
   label: z.string(),
-  type: z.enum(['text', 'number', 'select', 'boolean', 'json', 'code', 'password'] as [string, ...string[]]),
+  type: z.union([
+    z.literal('text'),
+    z.literal('number'),
+    z.literal('select'),
+    z.literal('boolean'),
+    z.literal('json'),
+    z.literal('code'),
+    z.literal('password')
+  ]),
   description: z.string().optional(),
   placeholder: z.string().optional(),
   default: z.any().optional(),
-  required: z.boolean().optional().default(false),
+  required: z.boolean().default(false),
   options: z.array(z.object({
     label: z.string(),
     value: z.any()
@@ -25,7 +39,7 @@ export const NodeDefinitionSchema = z.object({
   label: z.string(),
   paletteLabel: z.string().optional(),
   description: z.string().optional(),
-  icon: z.string().optional(), 
+  icon: z.string().optional(),
   color: z.string().optional(),
   fields: z.array(NodeFieldSchema).default([]),
   defaultConfig: z.record(z.any()).optional(),
@@ -53,8 +67,8 @@ export const EdgeSchema = z.object({
   id: z.string(),
   source: z.string(),
   target: z.string(),
-  sourceHandle: z.string().optional(),
-  targetHandle: z.string().optional(),
+  sourceHandle: z.string().optional().nullable(),
+  targetHandle: z.string().optional().nullable(),
 });
 export type Edge = z.infer<typeof EdgeSchema>;
 export const FLOW_STATUS_VALUES = ['active', 'draft', 'error', 'disabled'] as const;
@@ -62,7 +76,12 @@ export const FlowSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Name is required"),
   description: z.string().optional().nullable(),
-  status: z.enum(FLOW_STATUS_VALUES as unknown as [string, ...string[]]).default('draft'),
+  status: z.union([
+    z.literal('active'),
+    z.literal('draft'),
+    z.literal('error'),
+    z.literal('disabled')
+  ]).default('draft'),
   lastExecuted: z.string().optional().nullable(),
   nodes: z.array(NodeSchema).default([]),
   edges: z.array(EdgeSchema).default([]),
