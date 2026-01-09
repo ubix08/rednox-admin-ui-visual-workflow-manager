@@ -13,6 +13,7 @@ import { ExecutionModal } from '@/components/editor/ExecutionModal';
 import { workflowApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import { Flow } from '@/types/schema';
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -33,7 +34,17 @@ export function EditorPage() {
     queryFn: async () => {
       const response = await workflowApi.get(id!);
       if (!response.success) throw new Error(response.error);
-      return response.data;
+      const rawFlow = response.data as any;
+      return {
+        id: rawFlow.id,
+        name: rawFlow.name || 'Untitled Flow',
+        description: rawFlow.description || '',
+        status: rawFlow.enabled === 1 ? 'active' : (rawFlow.status || 'draft'),
+        createdAt: rawFlow.created_at || rawFlow.createdAt || new Date().toISOString(),
+        updatedAt: rawFlow.updated_at || rawFlow.updatedAt || new Date().toISOString(),
+        nodes: Array.isArray(rawFlow.nodes) ? rawFlow.nodes : [],
+        edges: Array.isArray(rawFlow.edges) ? rawFlow.edges : []
+      } as Flow;
     },
     enabled: !!id,
     retry: false
@@ -51,7 +62,7 @@ export function EditorPage() {
       return workflowApi.update(id!, {
         nodes: nodesToSave as any,
         edges: editorEdges as any,
-        status: flow?.status || 'draft'
+        status: flow?.status ?? 'draft'
       });
     },
     onSuccess: () => {
@@ -81,7 +92,7 @@ export function EditorPage() {
         }
       });
     }
-  }, [id, isExecuting, addLog, logs]);
+  }, [id, isExecuting, addLog]);
 
   useEffect(() => {
     if (isError && error instanceof Error && error.message?.includes('not found')) {
@@ -89,20 +100,20 @@ export function EditorPage() {
     }
   }, [isError, error, createNewMutation]);
   useEffect(() => {
-    if (flow) {
-      const initialNodes = flow.nodes.map(n => ({
-        id: n.id,
-        type: 'flowNode',
-        position: n.position,
-        data: {
-          label: n.label,
-          type: n.type,
-          category: n.category,
-          config: n.config || {}
-        },
-      }));
-      initializeEditor(flow.id, initialNodes as any, flow.edges as any);
-    }
+    if (!flow?.id) return;
+    const initialNodes = (flow.nodes ?? []).map((n: any) => ({
+      id: n.id,
+      type: 'flowNode',
+      position: n.position || {x:0,y:0},
+      data: {
+        label: n.label || 'Node',
+        type: n.type || 'unknown',
+        category: n.category || 'function',
+        config: n.config || {}
+      },
+    }));
+    const initialEdges = flow.edges ?? [];
+    initializeEditor(flow.id, initialNodes, initialEdges);
   }, [flow, initializeEditor]);
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
