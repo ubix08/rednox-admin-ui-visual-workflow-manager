@@ -9,12 +9,24 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<Api
         ...options?.headers,
       },
     });
+    const data = await response.json().catch(() => null);
     if (!response.ok) {
-      const errData = await response.json().catch(() => ({}));
-      return { success: false, error: errData.error || response.statusText };
+      console.warn(`[API Warning] ${response.status} ${endpoint}:`, data);
+      return { 
+        success: false, 
+        error: data?.error || data?.message || response.statusText 
+      };
     }
-    const data = await response.json();
-    return { success: true, data: data.data || data };
+    // Handle standard RedNox envelope { success: true, data: ... } 
+    // or direct data return if backend varies
+    if (data && typeof data === 'object' && 'success' in data) {
+      return { 
+        success: data.success, 
+        data: data.data ?? data, 
+        error: data.error 
+      };
+    }
+    return { success: true, data: data as T };
   } catch (error) {
     console.error(`[API Error] ${endpoint}:`, error);
     return { success: false, error: error instanceof Error ? error.message : 'Unknown network error' };
@@ -22,7 +34,7 @@ async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<Api
 }
 export const workflowApi = {
   list: () => apiFetch<Flow[]>('/admin/flows'),
-  create: (flowData: Partial<Flow>) => 
+  create: (flowData: Partial<Flow>) =>
     apiFetch<Flow>('/admin/flows', {
       method: 'POST',
       body: JSON.stringify(flowData),

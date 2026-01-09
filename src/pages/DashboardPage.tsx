@@ -6,7 +6,7 @@ import { CreateFlowDialog } from '@/components/dashboard/CreateFlowDialog';
 import { workflowApi } from '@/lib/api';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, FolderKanban, RefreshCw, Loader2, AlertTriangle } from 'lucide-react';
+import { Search, FolderKanban, RefreshCw, AlertTriangle } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 export function DashboardPage() {
   const [search, setSearch] = useState('');
@@ -14,13 +14,19 @@ export function DashboardPage() {
     queryKey: ['flows'],
     queryFn: async () => {
       const response = await workflowApi.list();
-      if (!response.success) throw new Error(response.error);
-      return response.data || [];
+      if (!response.success) throw new Error(response.error || 'Failed to fetch flows');
+      // Ensure we always return an array, even if API returns a single object or null
+      const data = response.data;
+      if (Array.isArray(data)) return data;
+      if (data && typeof data === 'object') return [data as any];
+      return [];
     }
   });
-  const filteredFlows = (flows || []).filter(f =>
-    f.name.toLowerCase().includes(search.toLowerCase()) ||
-    f.description?.toLowerCase().includes(search.toLowerCase())
+  // Robustly handle cases where 'flows' might not be an array despite our queryFn efforts
+  const safeFlows = Array.isArray(flows) ? flows : [];
+  const filteredFlows = safeFlows.filter(f =>
+    f?.name?.toLowerCase().includes(search.toLowerCase()) ||
+    f?.description?.toLowerCase().includes(search.toLowerCase())
   );
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -35,10 +41,10 @@ export function DashboardPage() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              <Button 
-                variant="outline" 
-                size="icon" 
-                onClick={() => refetch()} 
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={() => refetch()}
                 disabled={isLoading || isRefetching}
               >
                 <RefreshCw className={isRefetching ? "h-4 w-4 animate-spin" : "h-4 w-4"} />

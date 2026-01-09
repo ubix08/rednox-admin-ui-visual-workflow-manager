@@ -1,8 +1,8 @@
 import { z } from 'zod';
 export type FlowStatus = 'active' | 'draft' | 'error' | 'disabled';
 export const NODE_CATEGORIES = ['input', 'output', 'function', 'storage', 'social', 'utility'] as const;
-// Fix: explicitly provide the array as a tuple for z.enum
-export const NodeCategorySchema = z.enum([NODE_CATEGORIES[0], ...NODE_CATEGORIES.slice(1)]);
+// Using z.enum with the readonly array directly is the standard way to handle this in Zod
+export const NodeCategorySchema = z.enum(NODE_CATEGORIES);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
 export const NodeConfigSchema = z.object({
   method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).optional(),

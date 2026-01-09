@@ -19,6 +19,7 @@ export function EditorPage() {
   const [isExecutionModalOpen, setExecutionModalOpen] = useState(false);
   const logEndRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  // Zustand Store Selectors (One per call)
   const initializeEditor = useEditorStore((s) => s.initialize);
   const editorNodes = useEditorStore((s) => s.nodes);
   const editorEdges = useEditorStore((s) => s.edges);
@@ -45,26 +46,30 @@ export function EditorPage() {
         position: n.position,
         config: n.data?.config || {},
       }));
-      return workflowApi.update(id!, { nodes: nodesToSave as any, edges: editorEdges as any });
+      return workflowApi.update(id!, { 
+        nodes: nodesToSave as any, 
+        edges: editorEdges as any,
+        status: flow?.status || 'draft'
+      });
     },
     onSuccess: () => {
       toast.success('Workflow deployed');
       queryClient.invalidateQueries({ queryKey: ['flow', id] });
+      queryClient.invalidateQueries({ queryKey: ['flows'] });
     },
     onError: (err: any) => toast.error(err.message || 'Save failed'),
   });
   const pollLogs = useCallback(async () => {
-    if (!id) return;
-    const response = await workflowApi.getDebugLogs(id, 20);
-    if (response.success && response.data) {
-      // Logic to merge new logs if needed, for simplicity we replace or add if missing
+    if (!id || !isExecuting) return;
+    const response = await workflowApi.getDebugLogs(id, 10);
+    if (response.success && Array.isArray(response.data)) {
       response.data.reverse().forEach(log => {
         if (!logs.find(l => l.id === log.id)) {
           addLog(log);
         }
       });
     }
-  }, [id, addLog, logs]);
+  }, [id, isExecuting, addLog, logs]);
   useEffect(() => {
     if (flow) {
       const initialNodes = flow.nodes.map(n => ({
@@ -82,18 +87,21 @@ export function EditorPage() {
     }
   }, [flow, initializeEditor]);
   useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
     if (isExecuting) {
-      const interval = setInterval(pollLogs, 2000);
-      return () => clearInterval(interval);
+      interval = setInterval(pollLogs, 2500);
     }
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isExecuting, pollLogs]);
   useEffect(() => {
     if (logEndRef.current) {
       logEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs]);
-  if (isLoading) return <div className="h-screen flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>;
-  if (!flow) return <div className="h-screen flex flex-col items-center justify-center gap-4"><h2>Flow not found</h2><Link to="/"><Button>Dashboard</Button></Link></div>;
+  if (isLoading) return <div className="h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (!flow) return <div className="h-screen flex flex-col items-center justify-center gap-4 bg-background"><h2>Flow not found</h2><Link to="/"><Button>Back to Dashboard</Button></Link></div>;
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       <AppNavbar />
@@ -104,7 +112,7 @@ export function EditorPage() {
           </Button>
           <div>
             <h2 className="text-sm font-semibold leading-none">{flow.name}</h2>
-            <span className="text-[10px] text-muted-foreground">ID: {flow.id.slice(0, 8)}...</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-wider">{flow.status}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -112,7 +120,7 @@ export function EditorPage() {
             {isExecuting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3 fill-current" />}
             <span className="hidden sm:inline">Test Run</span>
           </Button>
-          <Button variant="default" size="sm" className="gap-2 h-8 text-xs bg-blue-600 hover:bg-blue-700" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
+          <Button variant="default" size="sm" className="gap-2 h-8 text-xs bg-primary hover:opacity-90" onClick={() => saveMutation.mutate()} disabled={saveMutation.isPending}>
             {saveMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3" />}
             <span className="hidden sm:inline">Deploy</span>
           </Button>
@@ -126,7 +134,7 @@ export function EditorPage() {
           <WorkflowCanvas />
         </main>
         <aside className={cn("absolute inset-0 z-30 bg-background transition-transform duration-300 md:relative md:translate-x-0 md:flex md:w-80 md:border-l md:shadow-sm", activeMobileTab === 'properties' ? "translate-x-0" : "translate-x-full lg:translate-x-0")}>
-          <Tabs defaultValue="properties" className="flex-1 flex flex-col">
+          <Tabs defaultValue="properties" className="flex-1 flex flex-col h-full">
             <div className="px-2 pt-2 border-b">
               <TabsList className="w-full justify-start h-9 bg-transparent p-0 gap-1">
                 <TabsTrigger value="properties" className="data-[state=active]:bg-background data-[state=active]:border border-transparent px-3 py-1 text-xs">
@@ -143,17 +151,31 @@ export function EditorPage() {
             </TabsContent>
             <TabsContent value="debug" className="flex-1 p-0 m-0 overflow-hidden flex flex-col bg-slate-950 text-slate-300">
               <div className="flex-1 p-4 font-mono text-[11px] overflow-auto space-y-2">
-                {logs.length === 0 ? <div className="h-full flex flex-col items-center justify-center opacity-30 text-center"><Terminal className="h-8 w-8 mb-2" /><p>No execution logs yet.</p></div> : 
+                {logs.length === 0 ? (
+                  <div className="h-full flex flex-col items-center justify-center opacity-30 text-center">
+                    <Terminal className="h-8 w-8 mb-2" />
+                    <p>No execution logs yet.</p>
+                  </div>
+                ) : (
                   logs.map((log) => (
                     <div key={log.id} className="border-l-2 border-slate-800 pl-3 py-1">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className={cn("uppercase text-[9px] font-bold px-1 rounded", log.level === 'info' && "bg-blue-500/20 text-blue-400", log.level === 'warn' && "bg-amber-500/20 text-amber-400", log.level === 'error' && "bg-red-500/20 text-red-400")}>{log.level}</span>
-                        <span className="text-[10px] text-slate-500 flex items-center gap-1"><Clock className="h-3 w-3" /> {log.timestamp}</span>
+                        <span className={cn(
+                          "uppercase text-[9px] font-bold px-1 rounded", 
+                          log.level === 'info' && "bg-blue-500/20 text-blue-400", 
+                          log.level === 'warn' && "bg-amber-500/20 text-amber-400", 
+                          log.level === 'error' && "bg-red-500/20 text-red-400"
+                        )}>
+                          {log.level}
+                        </span>
+                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                          <Clock className="h-3 w-3" /> {log.timestamp}
+                        </span>
                       </div>
                       <p className="whitespace-pre-wrap leading-relaxed">{log.message}</p>
                     </div>
                   ))
-                }
+                )}
                 <div ref={logEndRef} />
               </div>
               <div className="p-2 border-t border-slate-800 bg-slate-900">
@@ -166,9 +188,15 @@ export function EditorPage() {
         </aside>
       </div>
       <div className="md:hidden border-t h-14 grid grid-cols-3 bg-card z-40 shrink-0">
-        <Button variant="ghost" onClick={() => setActiveMobileTab('palette')} className={cn("flex-col h-full gap-1 py-1", activeMobileTab === 'palette' && "text-primary bg-primary/5")}><Box className="h-4 w-4" /><span className="text-[10px]">Nodes</span></Button>
-        <Button variant="ghost" onClick={() => setActiveMobileTab('canvas')} className={cn("flex-col h-full gap-1 py-1", activeMobileTab === 'canvas' && "text-primary bg-primary/5")}><Layers className="h-4 w-4" /><span className="text-[10px]">Canvas</span></Button>
-        <Button variant="ghost" onClick={() => setActiveMobileTab('properties')} className={cn("flex-col h-full gap-1 py-1", activeMobileTab === 'properties' && "text-primary bg-primary/5")}><Settings2 className="h-4 w-4" /><span className="text-[10px]">Config</span></Button>
+        <Button variant="ghost" onClick={() => setActiveMobileTab('palette')} className={cn("flex-col h-full gap-1 py-1", activeMobileTab === 'palette' && "text-primary bg-primary/5")}>
+          <Box className="h-4 w-4" /><span className="text-[10px]">Nodes</span>
+        </Button>
+        <Button variant="ghost" onClick={() => setActiveMobileTab('canvas')} className={cn("flex-col h-full gap-1 py-1", activeMobileTab === 'canvas' && "text-primary bg-primary/5")}>
+          <Layers className="h-4 w-4" /><span className="text-[10px]">Canvas</span>
+        </Button>
+        <Button variant="ghost" onClick={() => setActiveMobileTab('properties')} className={cn("flex-col h-full gap-1 py-1", activeMobileTab === 'properties' && "text-primary bg-primary/5")}>
+          <Settings2 className="h-4 w-4" /><span className="text-[10px]">Config</span>
+        </Button>
       </div>
       <ExecutionModal open={isExecutionModalOpen} onOpenChange={setExecutionModalOpen} flowId={flow.id} />
     </div>
