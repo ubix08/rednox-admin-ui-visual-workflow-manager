@@ -19,16 +19,16 @@ export function NodePalette({ definitions = [], categories = [], isLoading }: No
   const groupedNodes = useMemo(() => {
     const query = search.toLowerCase();
     const result: Record<string, NodeDefinition[]> = {};
-    definitions.forEach(def => {
-      if (!def.label.toLowerCase().includes(query) && 
-          !def.type.toLowerCase().includes(query) && 
+    (definitions ?? []).forEach(def => {
+      if (!def.label.toLowerCase().includes(query) &&
+          !def.type.toLowerCase().includes(query) &&
           !def.description?.toLowerCase().includes(query)) return;
       if (!result[def.category]) result[def.category] = [];
       result[def.category].push(def);
     });
     return result;
   }, [definitions, search]);
-  const activeCategories = categories.filter(cat => groupedNodes[cat]);
+  const activeCategories = (categories ?? []).filter(cat => groupedNodes[cat]);
   return (
     <div className="flex flex-col h-full bg-card/50">
       <div className="p-3 border-b">
@@ -49,14 +49,14 @@ export function NodePalette({ definitions = [], categories = [], isLoading }: No
             <span className="text-xs">Loading Nodes...</span>
           </div>
         ) : activeCategories.length > 0 ? (
-          <Accordion type="multiple" defaultValue={activeCategories} className="p-2 space-y-1">
+          <Accordion type="multiple" defaultValue={activeCategories.slice(0, 1)} className="p-2 space-y-1">
             {activeCategories.map((cat) => (
               <AccordionItem key={cat} value={cat} className="border-none">
                 <AccordionTrigger className="flex gap-2 py-2 px-2 hover:bg-accent/50 rounded-md transition-all text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:no-underline">
                   {cat}
                 </AccordionTrigger>
                 <AccordionContent className="pt-1 space-y-1">
-                  {groupedNodes[cat].map((node) => (
+                  {(groupedNodes[cat] ?? []).map((node) => (
                     <div
                       key={node.type}
                       draggable
@@ -69,7 +69,7 @@ export function NodePalette({ definitions = [], categories = [], isLoading }: No
                       <div className="flex flex-col overflow-hidden">
                         <span className="text-xs font-medium truncate">{node.label}</span>
                         <span className="text-[9px] text-muted-foreground truncate opacity-0 group-hover:opacity-100 transition-opacity">
-                          {node.outputs} out • {node.inputs} in
+                          {(node.outputs ?? 0)} out • {(node.inputs ?? 0)} in
                         </span>
                       </div>
                     </div>

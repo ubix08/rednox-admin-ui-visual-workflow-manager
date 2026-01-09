@@ -34,14 +34,16 @@ export function EditorPage() {
     queryKey: ['node-definitions'],
     queryFn: async () => {
       const resp = await workflowApi.listNodes();
-      return resp.success ? resp.data : [];
+      console.log('API /admin/nodes response:', resp);
+      return resp.success ? (Array.isArray(resp.data) ? resp.data : []) : [];
     }
   });
   const { data: categories, isLoading: isLoadingCategories } = useQuery({
     queryKey: ['node-categories'],
     queryFn: async () => {
       const resp = await workflowApi.listNodeCategories();
-      return resp.success ? resp.data : [];
+      console.log('API /admin/nodes/categories response:', resp);
+      return resp.success ? (Array.isArray(resp.data) ? resp.data : []) : [];
     }
   });
   const { data: flow, error, isError, isLoading: isLoadingFlow } = useQuery({
@@ -80,6 +82,7 @@ export function EditorPage() {
   const saveMutation = useMutation({
     mutationFn: () => {
       if (editorNodes.length === 0) throw new Error('Flow must have at least one node');
+      const currentFlow = queryClient.getQueryData(['flow', id]) as Flow | undefined;
       const nodesToSave = editorNodes.map(n => ({
         id: n.id,
         type: n.data?.type || 'unknown',
@@ -90,10 +93,10 @@ export function EditorPage() {
         config: n.data?.config || {},
       }));
       return workflowApi.update(id!, {
-        name: flow?.name ?? 'Untitled Flow',
+        name: currentFlow?.name ?? 'Untitled Flow',
         nodes: nodesToSave as any,
         edges: editorEdges as any,
-        status: flow?.status ?? 'draft'
+        status: currentFlow?.status ?? 'draft'
       });
     },
     onSuccess: () => {
@@ -120,7 +123,7 @@ export function EditorPage() {
   useEffect(() => {
     if (!flow?.id) return;
     initializeEditor(flow.id, flow.nodes as any[], flow.edges as any[]);
-  }, [flow?.id, flow?.nodes, flow?.edges, initializeEditor]);
+  }, [flow, initializeEditor]);
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
     if (isExecuting) {
