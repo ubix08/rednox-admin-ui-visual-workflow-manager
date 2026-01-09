@@ -15,10 +15,19 @@ export function DashboardPage() {
     queryFn: async () => {
       const response = await workflowApi.list();
       if (!response.success) throw new Error(response.error || 'Failed to fetch flows');
-      // Ensure we always return an array, even if API returns a single object or null
-      const data = response.data;
-      if (Array.isArray(data)) return data;
-      if (data && typeof data === 'object') return [data as any];
+      const apiData: any = response.data;
+      if (Array.isArray(apiData)) return apiData;
+      if (apiData?.flows && Array.isArray(apiData.flows)) {
+        return apiData.flows.map((f: any) => ({
+          ...f,
+          status: f.enabled === 1 ? 'active' : 'disabled',
+          createdAt: f.created_at || '',
+          updatedAt: f.updated_at || '',
+          lastExecuted: undefined,
+          nodes: [],
+          edges: []
+        })) as Flow[];
+      }
       return [];
     }
   });
