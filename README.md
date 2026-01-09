@@ -1,6 +1,6 @@
 # Rednox Admin UI
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ubix08/rednox-admin-ui-visual-workflow-manager)
 
 A production-ready full-stack admin dashboard template built with React, TypeScript, Tailwind CSS, Shadcn UI, and Cloudflare Workers. Features a modern UI with dark mode, sidebar navigation, API backend with Hono, and seamless deployment to Cloudflare.
 
@@ -95,7 +95,7 @@ Deploy to Cloudflare Workers & Pages in seconds:
    ```
    Deploys Worker backend + static assets.
 
-[cloudflarebutton]
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/ubix08/rednox-admin-ui-visual-workflow-manager)
 
 Your app will be live at `https://your-project.your-subdomain.workers.dev`.
 
