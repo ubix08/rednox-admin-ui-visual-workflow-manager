@@ -80,7 +80,8 @@ function runSetupCommands() {
     const commands = [
     "bun add reactflow@^11.11.4",
     "bun install @xyflow/react",
-    "bun install uuid"
+    "bun install uuid",
+    "bun install @tanstack/react-query"
 ];
     
     if (commands.length === 0) {
