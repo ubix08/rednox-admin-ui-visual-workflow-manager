@@ -78,7 +78,8 @@ function updateWranglerJsonc() {
 
 function runSetupCommands() {
     const commands = [
-    "bun add reactflow@^11.11.4"
+    "bun add reactflow@^11.11.4",
+    "bun install @xyflow/react"
 ];
     
     if (commands.length === 0) {
