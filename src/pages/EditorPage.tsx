@@ -14,7 +14,8 @@ import { workflowApi } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Flow } from '@/types/schema';
-import { ReactFlowProvider } from '@xyflow/react';
+import { ReactFlowProvider, type Edge, type Node } from '@xyflow/react';
+import type { NodeDefinition } from '@/types/schema';
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -31,6 +32,7 @@ export function EditorPage() {
   const isExecuting = useEditorStore((s) => s.isExecuting);
   const setDirty = useEditorStore((s) => s.setDirty);
   const isDirty = useEditorStore((s) => s.isDirty);
+  const setNodeDefs = useEditorStore((s) => s.setNodeDefs);
   const { data: nodeDefinitions, isLoading: isLoadingNodes } = useQuery({
     queryKey: ['node-definitions'],
     queryFn: async () => {
@@ -56,9 +58,9 @@ export function EditorPage() {
       const parsedNodes = apiNodes.map((n: any) => ({
         id: n.id,
         type: 'flowNode',
-        position: { 
-          x: Number(n.x ?? n.position?.x ?? 250), 
-          y: Number(n.y ?? n.position?.y ?? 100) 
+        position: {
+          x: Number(n.x ?? n.position?.x ?? 250),
+          y: Number(n.y ?? n.position?.y ?? 100)
         },
         data: {
           id: n.id,
@@ -68,6 +70,45 @@ export function EditorPage() {
           config: n.config || {},
         },
       }));
+
+      // Parse Node-RED wires format into ReactFlow edges
+      const nodeIdSet = new Set(parsedNodes.map((n: any) => n.id));
+      
+      // Collect raw connections first
+      const rawConnections: Array<{srcId: string, tgtId: string, outPort: number}> = [];
+      apiNodes.forEach((srcNode: any) => {
+        const srcId = srcNode.id;
+        const wires = srcNode.wires || [];
+        wires.forEach((outPortWires: string[], outPort: number) => {
+          outPortWires.forEach((tgtId: string) => {
+            if (nodeIdSet.has(tgtId)) {
+              rawConnections.push({ srcId, tgtId, outPort });
+            }
+          });
+        });
+      });
+
+      // Build incoming connections map for stable inPort assignment
+      const incomingMap: Record<string, Array<{srcId: string, outPort: number}>> = {};
+      rawConnections.forEach(({srcId, tgtId, outPort}) => {
+        if (!incomingMap[tgtId]) incomingMap[tgtId] = [];
+        incomingMap[tgtId].push({srcId, outPort});
+      });
+
+      // Create parsed edges with stable sequential inPorts
+      const parsedEdges: Edge[] = rawConnections.map(({srcId, tgtId, outPort}) => {
+        const inConns = incomingMap[tgtId]!;
+        inConns.sort((a, b) => a.srcId.localeCompare(b.srcId) || a.outPort - b.outPort);
+        const inPort = inConns.findIndex(c => c.srcId === srcId && c.outPort === outPort);
+        return {
+          id: `edge-${srcId}-${tgtId}-${outPort}-${inPort}`,
+          source: srcId,
+          target: tgtId,
+          sourceHandle: `${srcId}-o${outPort}`,
+          targetHandle: `${tgtId}-i${inPort}`
+        };
+      });
+
       return {
         id: rawFlow.id,
         name: rawFlow.name || 'Untitled Flow',
@@ -76,7 +117,7 @@ export function EditorPage() {
         createdAt: rawFlow.created_at || rawFlow.createdAt || new Date().toISOString(),
         updatedAt: rawFlow.updated_at || rawFlow.updatedAt || new Date().toISOString(),
         nodes: parsedNodes,
-        edges: rawFlow.config?.edges || rawFlow.edges || []
+        edges: parsedEdges
       } as Flow;
     },
     enabled: !!id,
@@ -85,24 +126,36 @@ export function EditorPage() {
   const saveMutation = useMutation({
     mutationFn: () => {
       const currentFlow = queryClient.getQueryData(['flow', id]) as Flow | undefined;
+      const nodeDefs = queryClient.getQueryData(['node-definitions']) || [];
+      const defsMap = new Map((nodeDefs as any[]).map(d => [d.type, d]));
+      const currentNodes = useEditorStore.getState().nodes as Node[];
+      const currentEdges = useEditorStore.getState().edges as Edge[];
+
+      const noderedNodes = currentNodes.map((n) => {
+        const def = defsMap.get(n.data.type as string) || { outputs: 1 };
+        const wires: string[][] = Array.from({length: def.outputs || 1}, () => []);
+        const outEdges = currentEdges.filter((e) => e.source === n.id);
+        outEdges.forEach((e) => {
+          const port = parseInt((e.sourceHandle || 'o0').match(/o(\d+)/)?.[1] || '0');
+          if (port >= 0 && port < wires.length) {
+            wires[port].push(e.target);
+          }
+        });
+        return {
+          id: n.id,
+          type: (n.data as any)?.type || 'unknown',
+          name: (n.data as any)?.label || n.id,
+          x: Math.round(n.position.x),
+          y: Math.round(n.position.y),
+          z: 1,
+          wires,
+          ...((n.data as any)?.config || {})
+        };
+      });
+
       const payload = {
         name: currentFlow?.name ?? 'Untitled Flow',
-        nodes: editorNodes.map(n => ({
-          id: n.id,
-          type: n.data?.type || 'unknown',
-          category: n.data?.category || 'function',
-          label: n.data?.label || 'Node',
-          x: n.position.x,
-          y: n.position.y,
-          config: n.data?.config || {},
-        })),
-        edges: editorEdges.map(e => ({
-          id: e.id,
-          source: e.source,
-          target: e.target,
-          sourceHandle: e.sourceHandle,
-          targetHandle: e.targetHandle
-        })),
+        nodes: noderedNodes,
         status: currentFlow?.status ?? 'draft'
       };
       console.log(`[Flow Save] Sending update for ${id}:`, payload);
@@ -110,8 +163,10 @@ export function EditorPage() {
     },
     onSuccess: (resp) => {
       if (resp.success) {
+        const nodes = useEditorStore.getState().nodes;
+        const edges = useEditorStore.getState().edges;
         toast.success('Workflow Deployed', {
-          description: `Persisted ${editorNodes.length} nodes and ${editorEdges.length} connections.`
+          description: `Persisted ${nodes.length} nodes and ${edges.length} connections.`
         });
         setDirty(false);
         queryClient.invalidateQueries({ queryKey: ['flow', id] });
@@ -151,6 +206,10 @@ export function EditorPage() {
   useEffect(() => {
     if (logEndRef.current) logEndRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
+
+  useEffect(() => {
+    if (nodeDefinitions && Array.isArray(nodeDefinitions)) setNodeDefs(nodeDefinitions);
+  }, [nodeDefinitions, setNodeDefs]);
   if (isLoadingFlow) return <div className="h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   return (
     <ReactFlowProvider>

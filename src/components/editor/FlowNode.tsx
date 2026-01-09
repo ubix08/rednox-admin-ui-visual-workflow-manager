@@ -1,5 +1,6 @@
 import React, { memo } from 'react';
 import { Handle, Position, NodeProps } from '@xyflow/react';
+import { NodeDefinition } from '@/types/schema';
 import { Box, Play, Database, Zap, Terminal, AlertCircle, CheckCircle2, Globe, MessageSquare, ShieldCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,7 +15,13 @@ const DEFAULT_ICONS: Record<string, React.ElementType> = {
 export const FlowNode = memo(({ id, data, selected }: NodeProps) => {
   const isExecuting = useEditorStore((s) => s.isExecuting);
   const logs = useEditorStore((s) => s.logs);
+  const nodeDefs = useEditorStore((s) => s.nodeDefs);
   const category = (data.category as string) || 'function';
+  
+  const def = React.useMemo(() => 
+    nodeDefs.find((d: NodeDefinition) => d.type === data.type) || { inputs: 1, outputs: 1 },
+    [nodeDefs, data.type]
+  );
   const label = (data.label as string) || 'Node';
   const icon = data.icon as string;
   const color = data.color as string;
@@ -92,16 +99,26 @@ export const FlowNode = memo(({ id, data, selected }: NodeProps) => {
           )}
         </div>
       </div>
-      <Handle
-        type="target"
-        position={Position.Left}
-        className="w-3 h-3 -left-1.5 bg-background border-2 border-muted-foreground/50 hover:border-primary hover:scale-125 transition-all z-10"
-      />
-      <Handle
-        type="source"
-        position={Position.Right}
-        className="w-3 h-3 -right-1.5 bg-background border-2 border-muted-foreground/50 hover:border-primary hover:scale-125 transition-all z-10"
-      />
+      {def.inputs > 0 && Array.from({ length: def.inputs }, (_, i) => (
+        <Handle
+          key={`i${i}`}
+          type="target"
+          position={Position.Left}
+          id={`i${i}`}
+          style={{ top: `${10 + i * (80 / Math.max(1, def.inputs - 1))}%`, left: '-1.5rem' }}
+          className="w-3 h-3 bg-background border-2 border-muted-foreground/50 hover:border-primary hover:scale-125 transition-all z-10"
+        />
+      ))}
+      {def.outputs > 0 && Array.from({ length: def.outputs }, (_, i) => (
+        <Handle
+          key={`o${i}`}
+          type="source"
+          position={Position.Right}
+          id={`o${i}`}
+          style={{ top: `${10 + i * (80 / Math.max(1, def.outputs - 1))}%`, right: '-1.5rem' }}
+          className="w-3 h-3 bg-background border-2 border-muted-foreground/50 hover:border-primary hover:scale-125 transition-all z-10"
+        />
+      ))}
     </div>
   );
 });

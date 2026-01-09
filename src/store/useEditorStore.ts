@@ -22,6 +22,7 @@ type EditorState = {
   currentFlowId: string | null;
   selectedNodeId: string | null;
   logs: ExecutionLog[];
+  nodeDefs: NodeDefinition[];
   isExecuting: boolean;
   isDirty: boolean;
   initialize: (flowId: string, nodes: Node[], edges: Edge[]) => void;
@@ -36,6 +37,7 @@ type EditorState = {
   deleteNode: (id: string) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
+  setNodeDefs: (defs: NodeDefinition[]) => void;
   addLog: (log: Pick<ExecutionLog, 'level' | 'message' | 'nodeId'>) => void;
   clearLogs: () => void;
   setExecuting: (status: boolean) => void;
@@ -47,6 +49,7 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   currentFlowId: null,
   selectedNodeId: null,
   logs: [],
+  nodeDefs: [],
   isExecuting: false,
   isDirty: false,
   initialize: (flowId, nodes, edges) => {
@@ -160,5 +163,6 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   },
   clearLogs: () => set({ logs: [] }),
   setExecuting: (status) => set({ isExecuting: status }),
-  setDirty: (dirty) => set({ isDirty: dirty })
+  setDirty: (dirty) => set({ isDirty: dirty }),
+  setNodeDefs: (defs) => set({ nodeDefs: defs })
 }));
