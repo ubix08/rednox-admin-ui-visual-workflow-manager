@@ -1,19 +1,35 @@
 import { z } from 'zod';
 export type FlowStatus = 'active' | 'draft' | 'error' | 'disabled';
-export const NodeCategorySchema = z.enum(['input', 'output', 'function', 'storage', 'social', 'utility'] as const);
+// Use a constant array to avoid "Expected 2-3 arguments" Zod error
+export const NODE_CATEGORIES = ['input', 'output', 'function', 'storage', 'social', 'utility'] as const;
+export const NodeCategorySchema = z.enum(NODE_CATEGORIES);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
+export const NodeConfigSchema = z.object({
+  // HTTP Node Config
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).optional(),
+  path: z.string().optional(),
+  // Script Node Config
+  code: z.string().optional(),
+  // Storage Node Config
+  key: z.string().optional(),
+  value: z.string().optional(),
+  // Common
+  retries: z.number().min(0).max(5).default(0),
+  timeout: z.number().min(100).max(30000).default(5000),
+}).catchall(z.any());
+export type NodeConfig = z.infer<typeof NodeConfigSchema>;
 export const NodeSchema = z.object({
   id: z.string(),
   type: z.string(),
   category: NodeCategorySchema,
   label: z.string(),
   description: z.string().optional(),
-  config: z.record(z.any()).default({}),
+  config: NodeConfigSchema.default({}),
   position: z.object({
     x: z.number(),
     y: z.number(),
   }),
-  data: z.record(z.any()).optional(), // Compatibility with React Flow's data prop
+  data: z.record(z.any()).optional(),
 });
 export type Node = z.infer<typeof NodeSchema>;
 export const EdgeSchema = z.object({
@@ -24,11 +40,12 @@ export const EdgeSchema = z.object({
   targetHandle: z.string().optional(),
 });
 export type Edge = z.infer<typeof EdgeSchema>;
+export const FLOW_STATUS_VALUES = ['active', 'draft', 'error', 'disabled'] as const;
 export const FlowSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Name is required"),
   description: z.string().optional(),
-  status: z.enum(['active', 'draft', 'error', 'disabled'] as const).default('draft'),
+  status: z.enum(FLOW_STATUS_VALUES).default('draft'),
   lastExecuted: z.string().optional(),
   nodes: z.array(NodeSchema).default([]),
   edges: z.array(EdgeSchema).default([]),

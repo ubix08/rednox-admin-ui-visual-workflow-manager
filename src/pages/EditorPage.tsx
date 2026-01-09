@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { AppNavbar } from '@/components/layout/AppNavbar';
 import { ChevronLeft, Save, Play, Settings2, Terminal, Box, Layers } from 'lucide-react';
@@ -8,9 +8,12 @@ import { useAppStore } from '@/store/useAppStore';
 import { useEditorStore } from '@/store/useEditorStore';
 import { WorkflowCanvas } from '@/components/editor/WorkflowCanvas';
 import { NodePalette } from '@/components/editor/NodePalette';
+import { PropertyEditor } from '@/components/editor/PropertyEditor';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 export function EditorPage() {
   const { id } = useParams<{ id: string }>();
+  const [activeMobileTab, setActiveMobileTab] = useState<'palette' | 'canvas' | 'properties'>('canvas');
   const flows = useAppStore((s) => s.flows);
   const updateFlowInStore = useAppStore((s) => s.updateFlow);
   const initializeEditor = useEditorStore((s) => s.initialize);
@@ -19,34 +22,43 @@ export function EditorPage() {
   const flow = flows.find(f => f.id === id);
   useEffect(() => {
     if (flow) {
-      // Initialize editor state from global store
-      // In a real app we'd map our custom node schema to RF nodes
       const initialNodes = flow.nodes.map(n => ({
         id: n.id,
         type: 'flowNode',
         position: n.position,
-        data: { label: n.label, type: n.type, category: n.category },
+        data: { 
+          label: n.label, 
+          type: n.type, 
+          category: n.category,
+          config: n.config || {}
+        },
       }));
       initializeEditor(flow.id, initialNodes as any, flow.edges as any);
     }
   }, [flow, initializeEditor]);
   const handleSave = () => {
     if (!id) return;
-    // Map RF nodes back to our schema
     const nodesToSave = editorNodes.map(n => ({
       id: n.id,
       type: (n.data?.type as string) || 'unknown',
       category: (n.data?.category as any) || 'function',
       label: (n.data?.label as string) || 'Node',
       position: n.position,
-      config: {},
+      config: n.data?.config || {},
     }));
     updateFlowInStore(id, {
       nodes: nodesToSave as any,
       edges: editorEdges as any,
     });
-    toast.success('Workflow saved', {
-      description: 'Changes have been committed to the serverless backend.'
+    toast.success('Workflow deployed successfully', {
+      description: 'The changes are now live on the serverless edge.'
+    });
+  };
+  const handleRun = () => {
+    toast.promise(new Promise(resolve => setTimeout(resolve, 1500)), {
+      loading: 'Triggering execution...',
+      success: 'Execution completed',
+      error: 'Execution failed',
     });
   };
   if (!flow) {
@@ -60,10 +72,9 @@ export function EditorPage() {
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-background">
       <AppNavbar />
-      {/* Editor Header */}
-      <div className="h-14 border-b px-4 flex items-center justify-between bg-card z-10 shadow-sm">
+      <div className="h-14 border-b px-4 flex items-center justify-between bg-card z-10 shadow-sm shrink-0">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild className="hover:bg-accent">
+          <Button variant="ghost" size="icon" asChild className="hover:bg-accent h-8 w-8">
             <Link to="/"><ChevronLeft className="h-4 w-4" /></Link>
           </Button>
           <div>
@@ -72,9 +83,9 @@ export function EditorPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="gap-2 h-8 text-xs">
+          <Button variant="outline" size="sm" className="gap-2 h-8 text-xs" onClick={handleRun}>
             <Play className="h-3 w-3 fill-current" />
-            Test Run
+            <span className="hidden sm:inline">Test Run</span>
           </Button>
           <Button 
             variant="default" 
@@ -83,13 +94,16 @@ export function EditorPage() {
             onClick={handleSave}
           >
             <Save className="h-3 w-3" />
-            Deploy
+            <span className="hidden sm:inline">Deploy</span>
           </Button>
         </div>
       </div>
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex overflow-hidden relative">
         {/* Left: Palette */}
-        <aside className="hidden md:flex w-64 border-r flex-col z-10 shadow-sm">
+        <aside className={cn(
+          "absolute inset-0 z-30 bg-background transition-transform duration-300 md:relative md:translate-x-0 md:flex md:w-64 md:border-r md:shadow-sm",
+          activeMobileTab === 'palette' ? "translate-x-0" : "-translate-x-full"
+        )}>
           <NodePalette />
         </aside>
         {/* Center: Canvas Area */}
@@ -97,7 +111,10 @@ export function EditorPage() {
           <WorkflowCanvas />
         </main>
         {/* Right: Properties / Debug */}
-        <aside className="hidden lg:flex w-80 border-l flex-col bg-card/50 z-10 shadow-sm">
+        <aside className={cn(
+          "absolute inset-0 z-30 bg-background transition-transform duration-300 md:relative md:translate-x-0 md:flex md:w-80 md:border-l md:shadow-sm",
+          activeMobileTab === 'properties' ? "translate-x-0" : "translate-x-full lg:translate-x-0"
+        )}>
           <Tabs defaultValue="properties" className="flex-1 flex flex-col">
             <div className="px-2 pt-2 border-b">
               <TabsList className="w-full justify-start h-9 bg-transparent p-0 gap-1">
@@ -111,20 +128,14 @@ export function EditorPage() {
                 </TabsTrigger>
               </TabsList>
             </div>
-            <TabsContent value="properties" className="flex-1 p-4 m-0 overflow-auto">
-              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground space-y-3 p-6 border-2 border-dashed rounded-lg border-muted">
-                <Settings2 className="h-10 w-10 opacity-10" />
-                <div>
-                  <p className="text-xs font-medium text-foreground">No node selected</p>
-                  <p className="text-[10px] mt-1">Select a node on the canvas to configure its specialized parameters.</p>
-                </div>
-              </div>
+            <TabsContent value="properties" className="flex-1 p-0 m-0 overflow-hidden">
+              <PropertyEditor />
             </TabsContent>
             <TabsContent value="debug" className="flex-1 p-0 m-0 overflow-hidden flex flex-col">
               <div className="flex-1 p-4 font-mono text-xs overflow-auto space-y-2">
                 <div className="text-blue-500 flex items-center gap-2">
-                  <Terminal className="h-3 w-3" />
-                  <span>[System] Environment ready.</span>
+                  <Terminal className="h-3.5 w-3.5" />
+                  <span>[System] Connected to RedNox v1.2.4</span>
                 </div>
                 <div className="text-muted-foreground flex items-center gap-2">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -139,16 +150,28 @@ export function EditorPage() {
         </aside>
       </div>
       {/* Mobile Bottom Navigation */}
-      <div className="md:hidden border-t h-14 grid grid-cols-3 bg-card z-20">
-        <Button variant="ghost" className="flex-col h-full rounded-none gap-1 py-1">
+      <div className="md:hidden border-t h-14 grid grid-cols-3 bg-card z-40 shrink-0">
+        <Button 
+          variant="ghost" 
+          onClick={() => setActiveMobileTab('palette')}
+          className={cn("flex-col h-full rounded-none gap-1 py-1", activeMobileTab === 'palette' && "text-primary bg-primary/5")}
+        >
           <Box className="h-4 w-4" />
           <span className="text-[10px]">Nodes</span>
         </Button>
-        <Button variant="ghost" className="flex-col h-full rounded-none gap-1 py-1 text-primary bg-primary/5">
+        <Button 
+          variant="ghost" 
+          onClick={() => setActiveMobileTab('canvas')}
+          className={cn("flex-col h-full rounded-none gap-1 py-1", activeMobileTab === 'canvas' && "text-primary bg-primary/5")}
+        >
           <Layers className="h-4 w-4" />
           <span className="text-[10px]">Canvas</span>
         </Button>
-        <Button variant="ghost" className="flex-col h-full rounded-none gap-1 py-1">
+        <Button 
+          variant="ghost" 
+          onClick={() => setActiveMobileTab('properties')}
+          className={cn("flex-col h-full rounded-none gap-1 py-1", activeMobileTab === 'properties' && "text-primary bg-primary/5")}
+        >
           <Settings2 className="h-4 w-4" />
           <span className="text-[10px]">Config</span>
         </Button>
