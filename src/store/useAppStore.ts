@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-
-
-interface AppState {}
-
+export type AppState = {
+  lastVisitedFlowId?: string;
+  theme?: 'light' | 'dark';
+};
 export const useAppStore = create<AppState>()((set, get) => ({}));

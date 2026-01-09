@@ -31,7 +31,6 @@ interface EditorState {
   deleteNode: (id: string) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
-  // Execution & Debug
   addLog: (log: Omit<ExecutionLog, 'id' | 'timestamp'>) => void;
   clearLogs: () => void;
   setExecuting: (status: boolean) => void;
@@ -113,8 +112,3 @@ export const useEditorStore = create<EditorState>((set, get) => ({
   clearLogs: () => set({ logs: [] }),
   setExecuting: (status) => set({ isExecuting: status }),
 }));
-// Fixing the AppState lint error by making it an object type instead of empty interface
-export type AppState = {
-  // Global settings for the app can go here later
-  lastVisitedFlowId?: string;
-};

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useEditorStore } from '@/store/useEditorStore';
 import { Input } from '@/components/ui/input';
@@ -8,10 +8,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
-import { Settings2, Trash2, Info, Code, Loader2, AlertCircle } from 'lucide-react';
+import { Settings2, Trash2, Info, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { workflowApi } from '@/lib/api';
-import { NodeDefinition, NodeField } from '@/types/schema';
+import { NodeField } from '@/types/schema';
+import { cn } from '@/lib/utils';
 export function PropertyEditor() {
   const selectedId = useEditorStore((s) => s.selectedNodeId);
   const nodes = useEditorStore((s) => s.nodes);
@@ -92,7 +93,12 @@ export function PropertyEditor() {
             onChange={(e) => {
               let val = e.target.value;
               if (field.type === 'json') {
-                try { val = JSON.parse(e.target.value); } catch {}
+                try { 
+                  val = JSON.parse(e.target.value); 
+                } catch (err) {
+                  // Fallback to raw string if JSON parsing fails during editing
+                  val = e.target.value;
+                }
               }
               handleFieldChange(field.name, val);
             }}
@@ -216,7 +222,7 @@ export function PropertyEditor() {
       <div className="p-3 border-t bg-muted/20 shrink-0">
         <p className="text-[9px] text-muted-foreground flex items-center gap-1.5">
           <Info className="h-3 w-3" />
-          Node schema v2.0 • Real-time synchronization
+          Node schema v2.0 �� Real-time synchronization
         </p>
       </div>
     </div>

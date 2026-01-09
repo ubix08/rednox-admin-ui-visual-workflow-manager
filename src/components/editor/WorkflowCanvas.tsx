@@ -4,6 +4,7 @@ import '@xyflow/react/dist/style.css';
 import { useEditorStore } from '@/store/useEditorStore';
 import { FlowNode } from './FlowNode';
 import { Layers, MousePointer2 } from 'lucide-react';
+import { NodeDefinition } from '@/types/schema';
 export function WorkflowCanvas() {
   const nodes = useEditorStore((s) => s.nodes);
   const edges = useEditorStore((s) => s.edges);
@@ -24,14 +25,19 @@ export function WorkflowCanvas() {
     (event: React.DragEvent) => {
       event.preventDefault();
       if (!reactFlowWrapper.current) return;
-      const type = event.dataTransfer.getData('application/reactflow');
-      if (!type) return;
-      const rect = reactFlowWrapper.current.getBoundingClientRect();
-      const position = {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      };
-      addNode(type, position, type);
+      const definitionRaw = event.dataTransfer.getData('application/reactflow-def');
+      if (!definitionRaw) return;
+      try {
+        const definition = JSON.parse(definitionRaw) as NodeDefinition;
+        const rect = reactFlowWrapper.current.getBoundingClientRect();
+        const position = {
+          x: event.clientX - rect.left,
+          y: event.clientY - rect.top,
+        };
+        addNode(definition, position);
+      } catch (err) {
+        console.error("Failed to parse node definition during drop", err);
+      }
     },
     [addNode]
   );
@@ -58,15 +64,15 @@ export function WorkflowCanvas() {
       >
         <Background gap={20} size={1} color="hsl(var(--muted-foreground)/0.2)" />
         <Controls />
-        <MiniMap 
-          zoomable 
-          pannable 
+        <MiniMap
+          zoomable
+          pannable
           nodeColor={(n) => {
             const cat = n.data?.category as string;
             if (cat === 'input') return '#10b981';
             if (cat === 'output') return '#ef4444';
             return '#3b82f6';
-          }} 
+          }}
         />
         <Panel position="top-right" className="bg-background/80 backdrop-blur-md border p-1 rounded-md shadow-sm flex items-center gap-2 m-4">
           <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-medium text-muted-foreground border-r pr-2">

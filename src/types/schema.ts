@@ -1,13 +1,13 @@
 import { z } from 'zod';
 export type FlowStatus = 'active' | 'draft' | 'error' | 'disabled';
 export const NODE_CATEGORIES = ['input', 'output', 'function', 'storage', 'social', 'utility'] as const;
-// Fix: Use z.enum with a casted readonly array or direct strings to avoid the 2-3 arguments error
-export const NodeCategorySchema = z.enum(['input', 'output', 'function', 'storage', 'social', 'utility']);
+// Fix: Zod enum requires a non-empty tuple [string, ...string[]]
+export const NodeCategorySchema = z.enum(['input', 'output', 'function', 'storage', 'social', 'utility'] as [string, ...string[]]);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
 export const NodeFieldSchema = z.object({
   name: z.string(),
   label: z.string(),
-  type: z.enum(['text', 'number', 'select', 'boolean', 'json', 'code', 'password']),
+  type: z.enum(['text', 'number', 'select', 'boolean', 'json', 'code', 'password'] as [string, ...string[]]),
   description: z.string().optional(),
   placeholder: z.string().optional(),
   default: z.any().optional(),
@@ -25,8 +25,8 @@ export const NodeDefinitionSchema = z.object({
   label: z.string(),
   paletteLabel: z.string().optional(),
   description: z.string().optional(),
-  icon: z.string().optional(), // Emoji or Lucide icon name
-  color: z.string().optional(), // Hex or tailwind class
+  icon: z.string().optional(), 
+  color: z.string().optional(),
   fields: z.array(NodeFieldSchema).default([]),
   defaultConfig: z.record(z.any()).optional(),
   inputs: z.number().default(1),
@@ -62,7 +62,7 @@ export const FlowSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Name is required"),
   description: z.string().optional().nullable(),
-  status: z.enum(FLOW_STATUS_VALUES).default('draft'),
+  status: z.enum(FLOW_STATUS_VALUES as unknown as [string, ...string[]]).default('draft'),
   lastExecuted: z.string().optional().nullable(),
   nodes: z.array(NodeSchema).default([]),
   edges: z.array(EdgeSchema).default([]),
