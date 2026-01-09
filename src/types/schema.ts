@@ -1,18 +1,15 @@
 import { z } from 'zod';
 export type FlowStatus = 'active' | 'draft' | 'error' | 'disabled';
 export const NODE_CATEGORIES = ['input', 'output', 'function', 'storage', 'social', 'utility'] as const;
-export const NodeCategorySchema = z.enum(NODE_CATEGORIES);
+// Fix: explicitly provide the array as a tuple for z.enum
+export const NodeCategorySchema = z.enum([NODE_CATEGORIES[0], ...NODE_CATEGORIES.slice(1)]);
 export type NodeCategory = z.infer<typeof NodeCategorySchema>;
 export const NodeConfigSchema = z.object({
-  // HTTP Node Config
   method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).optional(),
   path: z.string().optional(),
-  // Script Node Config
   code: z.string().optional(),
-  // Storage Node Config
   key: z.string().optional(),
   value: z.string().optional(),
-  // Common
   retries: z.number().min(0).max(5).default(0),
   timeout: z.number().min(100).max(30000).default(5000),
 }).catchall(z.any());
@@ -46,9 +43,9 @@ export const FLOW_STATUS_VALUES = ['active', 'draft', 'error', 'disabled'] as co
 export const FlowSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "Name is required"),
-  description: z.string().optional(),
+  description: z.string().optional().nullable(),
   status: z.enum(FLOW_STATUS_VALUES).default('draft'),
-  lastExecuted: z.string().optional(),
+  lastExecuted: z.string().optional().nullable(),
   nodes: z.array(NodeSchema).default([]),
   edges: z.array(EdgeSchema).default([]),
   createdAt: z.string(),
@@ -66,4 +63,10 @@ export interface ExecutionLog {
   level: 'info' | 'warn' | 'error';
   message: string;
   nodeId?: string;
+}
+export interface ExecutionResult {
+  success: boolean;
+  logs: ExecutionLog[];
+  executedAt: string;
+  result?: any;
 }
