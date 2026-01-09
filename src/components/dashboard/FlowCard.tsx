@@ -1,16 +1,14 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Play, Edit3, Trash2, Clock, Activity, AlertCircle, PauseCircle, Loader2 } from 'lucide-react';
+import { Play, Edit3, Trash2, Clock, Activity, AlertCircle, PauseCircle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Flow, FlowStatus } from '@/types/schema';
 import { formatDistanceToNow } from 'date-fns';
+import { useAppStore } from '@/store/useAppStore';
 import { cn } from '@/lib/utils';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { workflowApi } from '@/lib/api';
-import { toast } from 'sonner';
 interface FlowCardProps {
   flow: Flow;
 }
@@ -21,26 +19,8 @@ const statusConfig: Record<FlowStatus, { label: string; color: string; icon: Rea
   disabled: { label: 'Disabled', color: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-400', icon: PauseCircle },
 };
 export function FlowCard({ flow }: FlowCardProps) {
-  const queryClient = useQueryClient();
-  const deleteMutation = useMutation({
-    mutationFn: () => workflowApi.delete(flow.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flows'] });
-      toast.success('Workflow deleted');
-    },
-    onError: (err: any) => toast.error(err.message || 'Failed to delete flow'),
-  });
-  const toggleMutation = useMutation({
-    mutationFn: async () => {
-      if (flow.status === 'active') return workflowApi.disable(flow.id);
-      return workflowApi.enable(flow.id);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flows'] });
-      toast.success(`Workflow ${flow.status === 'active' ? 'disabled' : 'enabled'}`);
-    },
-    onError: (err: any) => toast.error(err.message || 'Failed to toggle flow status'),
-  });
+  const deleteFlow = useAppStore((s) => s.deleteFlow);
+  const toggleFlowStatus = useAppStore((s) => s.toggleFlowStatus);
   const config = statusConfig[flow.status];
   const StatusIcon = config.icon;
   return (
@@ -55,14 +35,8 @@ export function FlowCard({ flow }: FlowCardProps) {
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" 
-                    onClick={() => deleteMutation.mutate()}
-                    disabled={deleteMutation.isPending}
-                  >
-                    {deleteMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => deleteFlow(flow.id)}>
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Delete Flow</TooltipContent>
@@ -98,18 +72,13 @@ export function FlowCard({ flow }: FlowCardProps) {
             Edit Flow
           </Link>
         </Button>
-        <Button
-          variant="outline"
-          size="icon"
-          disabled={toggleMutation.isPending}
+        <Button 
+          variant="outline" 
+          size="icon" 
           className={cn(flow.status === 'active' ? "text-amber-600 hover:text-amber-700 hover:bg-amber-50" : "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50")}
-          onClick={() => toggleMutation.mutate()}
+          onClick={() => toggleFlowStatus(flow.id)}
         >
-          {toggleMutation.isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            flow.status === 'active' ? <PauseCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />
-          )}
+          {flow.status === 'active' ? <PauseCircle className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </Button>
       </CardFooter>
     </Card>
